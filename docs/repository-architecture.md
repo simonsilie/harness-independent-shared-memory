@@ -34,7 +34,7 @@ Run commands from the repository root with uv:
 ```sh
 uv run --locked python -m evaluation.recall.score evaluation/results-codex.json
 uv run --locked python -m evaluation.opencode.run --verify-only
-uv run --locked python -m ops --help
+uv run --locked memory-ops --help
 WATCHFILES_FORCE_POLLING=true uv run --locked python evaluation/native/mcp_watcher.py --semantic-disabled
 uv run --locked pytest -m "not integration"
 uv run --locked pytest -m integration

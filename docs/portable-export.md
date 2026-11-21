@@ -35,7 +35,7 @@ single project's bundle is not the complete store. The `export` command in the
 one `bundles/<project>` directory per configured project:
 
 ```sh
-uv run --locked --no-sync python -m ops export \
+uv run --locked memory-ops export \
   "$HOME/SharedMemory" "$HOME/SharedMemoryExports/<identifier>"
 ```
 

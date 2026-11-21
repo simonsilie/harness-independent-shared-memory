@@ -9,7 +9,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tomllib
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -20,26 +19,18 @@ import configargparse
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = ROOT / "patches" / "basic-memory-semantic-disable.patch"
 PROJECT_CREATE_PATCH = ROOT / "patches" / "basic-memory-mcp-project-create.patch"
-LOCK = ROOT / "uv.lock"
 WATCHER = ROOT / "evaluation" / "native" / "mcp_watcher.py"
 DIST = ROOT / "build" / "dist"
 VERIFY_ENV = ROOT / "build" / ".verify-venv"
+BASE_VERSION = "1.0.0"
+BASE_WHEEL_URL = (
+    "https://files.pythonhosted.org/packages/ee/e8/64511d7619dd8ef3208ba4fa2b7df6ea3591f96ed33fce0021d81ebcdc07/"
+    "basic_memory-1.0.0-py3-none-any.whl"
+)
+BASE_WHEEL_SHA256 = "a2d2c1589616c9599aec9edd6597d508028c5af88632312fc0990dcaccf02867"
 BUILD_REVISION = "semantic.2"
 PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "-p1", "-i", str(PATCH)]
 WHEEL_SUFFIX = "-py3-none-any.whl"
-
-
-def load_pin() -> tuple[str, str, str]:
-    """Return the Basic Memory version, wheel URL and wheel hash recorded in uv.lock."""
-    lock = tomllib.loads(LOCK.read_text())
-    package = next((item for item in lock["package"] if item["name"] == "basic-memory"), None)
-    if package is None:
-        raise ValueError(f"basic-memory is not pinned in {LOCK}")
-    wheels = [item for item in package["wheels"] if item["url"].endswith(WHEEL_SUFFIX)]
-    if len(wheels) != 1:
-        raise ValueError(f"expected one pure-Python wheel for basic-memory in {LOCK}, found {len(wheels)}")
-    wheel = wheels[0]
-    return package["version"], wheel["url"], wheel["hash"].removeprefix("sha256:")
 
 
 def download(url: str, expected_sha256: str) -> bytes:
@@ -141,11 +132,10 @@ def package_wheel(source: Path, out_dir: Path, base_version: str, expected_sha25
 
 
 def build(out_dir: Path, local_wheel: Path | None) -> tuple[Path, dict]:
-    version, url, wheel_hash = load_pin()
     with TemporaryDirectory() as temporary:
         source = Path(temporary) / "pinned.whl"
-        source.write_bytes(local_wheel.read_bytes() if local_wheel else download(url, wheel_hash))
-        return package_wheel(source, out_dir, version, wheel_hash)
+        source.write_bytes(local_wheel.read_bytes() if local_wheel else download(BASE_WHEEL_URL, BASE_WHEEL_SHA256))
+        return package_wheel(source, out_dir, BASE_VERSION, BASE_WHEEL_SHA256)
 
 
 def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.CompletedProcess:
@@ -166,15 +156,25 @@ def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.
     with TemporaryDirectory() as temporary:
         requirements = Path(temporary) / "requirements.txt"
         exported = subprocess.run(
-            [uv, "export", "--locked", "--no-dev", "--no-emit-project", "--no-hashes", "--format", "requirements-txt"],
+            [
+                uv,
+                "export",
+                "--locked",
+                "--no-dev",
+                "--no-emit-project",
+                "--no-emit-package",
+                "basic-memory",
+                "--no-hashes",
+                "--format",
+                "requirements-txt",
+            ],
             cwd=ROOT,
             env=uv_env,
             capture_output=True,
             text=True,
             check=True,
         ).stdout
-        kept = [line for line in exported.splitlines() if not line.startswith("basic-memory==")]
-        requirements.write_text("\n".join([*kept, str(wheel)]) + "\n")
+        requirements.write_text(f"{exported.rstrip()}\n{wheel}\n")
         subprocess.run(
             [uv, "pip", "install", "--python", str(VERIFY_ENV / "bin" / "python"), "-r", str(requirements)],
             cwd=ROOT,
@@ -196,7 +196,7 @@ def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.
 def main(argv: list[str] | None = None) -> int:
     parser = configargparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    build_command = commands.add_parser("build", help="build the patched wheel from the uv lock pin")
+    build_command = commands.add_parser("build", help="build the patched wheel from pinned upstream source")
     build_command.add_argument("--out", type=Path, default=DIST, env_var="SHARED_MEMORY_RUNTIME_OUT")
     build_command.add_argument(
         "--wheel",

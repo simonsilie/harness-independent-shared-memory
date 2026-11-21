@@ -16,20 +16,16 @@ default.
 
 ## Quick start
 
-From a fresh checkout on macOS or Linux, use `uv` and `patch` to build and
-install the patched Basic Memory wheel. The checkout selects Python 3.14. Use
-the installed `basic-memory` executable directly afterward so a dependency
-sync does not replace the patch.
+From a fresh checkout on macOS or Linux, sync the locked environment with `uv`.
+The checkout selects Python 3.14. Both `uv sync` and `uv run` use the patched
+Basic Memory wheel from the lockfile.
 
 ```sh
 uv sync --locked
-uv run --locked --no-sync python build/semantic_runtime.py build
-uv pip install --python .venv/bin/python --no-deps \
-  build/dist/basic_memory-1.0.0+semantic.2-py3-none-any.whl
 ```
 
 Run a command with `--help` to see its environment variables. For example,
-`SHARED_MEMORY_RUNTIME_OUT=build/dist .venv/bin/python build/semantic_runtime.py build`
+`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked build-memory-runtime build`
 sets the output directory. Command-line arguments take precedence.
 `LOGURU_LEVEL` controls which status messages appear on stderr.
 

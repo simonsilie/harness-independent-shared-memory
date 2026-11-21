@@ -21,14 +21,51 @@ The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
 refuses an unpatched runtime before native startup. It forces local routing,
 semantic search off, automatic updates and Logfire off, polling-based file
 watching and private file permissions. Moving the checkout requires adjusting
-the launcher; rebuilding the environment requires reapplying the patch.
+the launcher. Rebuild the environment with `uv sync --locked` to install the
+patched wheel from the lockfile.
 
 The Toolbox also provides `bin/shared-memory-approval-gate` and
 `dotfiles/shared-memory/approval-gate.json` for the
 [durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
 The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server. The installed environment must include the gate's Python
-dependencies before rollout. Activation changes the client launcher path.
+native server. Run `uv run install-approval-gate` from the checkout or use
+`uv run --project /path/to/checkout install-approval-gate` from another working
+directory. The command reads the gate's dependency pins from `uv.lock` and
+targets an existing Basic Memory environment. Pass `--wheel` to install a
+prebuilt patched wheel in the same step. Otherwise, the installed Basic Memory
+version stays in place.
+
+Pass the approval-gate configuration directly with `--config`. For Toolbox,
+this is its `dotfiles/shared-memory/approval-gate.json`. With a client that
+accepts MCP arguments and environment variables, you can also run the proxy
+directly. Set `PYTHONPATH` to the checkout, use the environment's Python as the
+command, and pass `-m approval_gate.proxy --config /path/to/approval-gate.json`
+as arguments.
+
+To preview a deployment that switches existing launcher entries, substitute
+the paths and current command values below:
+
+```sh
+checkout=/path/to/shared-memory-checkout
+uv run --project "$checkout" install-approval-gate \
+  --python "$checkout/.venv/bin/python" \
+  --config /path/to/approval-gate.json \
+  --wheel /path/to/basic_memory-1.0.0+semantic.2-py3-none-any.whl \
+  --replace-launcher /path/to/codex/config.toml \
+    /path/to/shared-memory-mcp /path/to/shared-memory-approval-gate \
+  --replace-launcher /path/to/opencode/opencode.jsonc \
+    /path/to/shared-memory-mcp /path/to/shared-memory-approval-gate \
+  --dry-run
+```
+
+Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
+configuration and its exact old and new command values. Repeat it for any
+project-local overrides. The script runs the native integration tests against
+disposable stores before changing launcher entries. Use `--test` to run the
+same tests when installing the gate dependencies alone. Entries that pass
+arguments to the native launcher need a separate edit to remove those arguments
+when switching to the proxy. Restart the clients after changing their launcher
+entries.
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).

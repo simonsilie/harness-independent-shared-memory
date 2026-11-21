@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).parent / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-native-coverage")
 OUT.mkdir(parents=True)
 logger.info(f"Native memory coverage artifacts: {OUT}")
-assert version("basic-memory") == "1.0.0"
+assert version("basic-memory").partition("+")[0] == "1.0.0"
 state = OUT / "state"
 state.mkdir()
 projects = {name: OUT / name for name in ("personal", "alpha", "beta")}

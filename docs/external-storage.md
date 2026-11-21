@@ -62,7 +62,7 @@ uv run --locked basic-memory mcp --transport stdio
 
 The verification processes have stopped; no persistent daemon was installed.
 The experiment's `./evaluation/bm` launcher still targets the historical corpus and must
-not serve productive memory. Rebuilding `.venv` requires reapplying the patch.
+not serve productive memory. `uv sync --locked` rebuilds `.venv` with the patched wheel.
 
 ## Preservation and verification
 
