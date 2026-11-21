@@ -52,7 +52,7 @@ Run these steps from the memory project root. The runner supplies `evaluation/cl
    uv run --locked python evaluation/claude/run.py
    ```
 
-   This repeats the inventory check on the evaluated session's own `init` event. The prompt matches the Codex prompt and contains the contents of `evaluation/questions.json`; neither `evaluation/recall/prepare.py` nor the answer key is supplied or indexed. The model is the account default, recorded in `effective-tools.json`. Raw stream events, including every tool call and result, are retained in `events.jsonl`. This is workflow isolation under a trusted owner, not an OS confidentiality boundary.
+   The runner first repeats the blocking preflight and requires exactly `bm_search` and `bm_read` before sending the questions, so an unexpected tool stops the run without a model request. The preflight inventory is saved to `effective-tools.json` and traced to `preflight-events.jsonl`; the questions go to a separate session using `client-settings.json` without the hook, whose own `init` event is checked again. The prompt matches the Codex prompt and contains the contents of `evaluation/questions.json`; neither `evaluation/recall/prepare.py` nor the answer key is supplied or indexed. The model is the account default. Raw stream events, including every tool call and result, are retained in `events.jsonl`. This is workflow isolation under a trusted owner, not an OS confidentiality boundary.
 
 5. Verify the response against actual tool calls, then score it. Replace `RUN_DIRECTORY` with the directory printed by the runner:
 

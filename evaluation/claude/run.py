@@ -33,10 +33,21 @@ For each question, make one bm_search call with an appropriate keyword query, ex
 Return only a JSON array with one object per question: question_id, query (the actual bm_search query), mode (the actual supplied mode), retrieved_ids (all IDs returned by that search in order), recognized_missing_evidence (boolean), and answer (a short source-grounded answer, explicitly saying when evidence is missing). Proposal requirements are not implemented or tested capabilities.
 Questions:
 """
+INVENTORY_KEYS = ("claude_code_version", "model", "tools", "mcp_servers", "permissionMode", "memory_paths")
 
 
 def corpus_hashes():
     return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT / "evaluation/corpus").glob("*.md")}
+
+
+def init_inventory(messages):
+    init = next(m for m in messages if m.get("type") == "system" and m.get("subtype") == "init")
+    return init, {key: init.get(key) for key in INVENTORY_KEYS}
+
+
+def require_allowed_tools(init, connected):
+    if set(init["tools"]) != ALLOWED_TOOLS or not connected:
+        raise SystemExit(f"Effective tool inventory failed: {init['tools']} {init['mcp_servers']}")
 
 
 def main():
@@ -47,12 +58,13 @@ def main():
     if "--outage" in sys.argv:
         mcp["mcpServers"]["basic_memory"] |= {"command": "/usr/bin/false", "args": []}
     settings = json.loads((ROOT / "evaluation/claude/settings.json").read_text())
-    preflight = "--verify-only" in sys.argv or "--outage" in sys.argv
-    if preflight:
-        # Blocking the prompt stops the turn after the live inventory is reported, before any model request.
-        settings["hooks"] = {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "exit 2"}]}]}
     (OUT / "mcp-config.json").write_text(json.dumps(mcp, indent=2) + "\n")
     (OUT / "client-settings.json").write_text(json.dumps(settings, indent=2) + "\n")
+    # The blocking hook stops the turn after the live inventory is reported, before any model request.
+    preflight_settings = settings | {
+        "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "exit 2"}]}]}
+    }
+    (OUT / "preflight-settings.json").write_text(json.dumps(preflight_settings, indent=2) + "\n")
     version = subprocess.run(["claude", "--version"], capture_output=True, text=True).stdout.strip()
     bm_version = subprocess.run(
         ["./evaluation/bm", "--version"], capture_output=True, text=True, cwd=ROOT
@@ -60,59 +72,58 @@ def main():
     (OUT / "client-version.json").write_text(
         json.dumps({"claude_code": version, "basic_memory": bm_version}, indent=2) + "\n"
     )
-    if "--startup" in sys.argv:
-        prompt, instructions = STARTUP_PROMPT, STARTUP_INSTRUCTIONS
-    elif preflight:
-        prompt, instructions = "Check readiness.", RECALL_INSTRUCTIONS
-    else:
-        prompt, instructions = RECALL_PROMPT + (ROOT / "evaluation/questions.json").read_text(), RECALL_INSTRUCTIONS
-    (OUT / "prompt.txt").write_text(prompt)
-    (OUT / "instructions.txt").write_text(instructions)
-    command = [
-        "claude",
-        "--print",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--session-id",
-        str(uuid4()),
-        "--no-session-persistence",
-        "--setting-sources",
-        "",
-        "--settings",
-        str(OUT / "client-settings.json"),
-        "--strict-mcp-config",
-        "--mcp-config",
-        str(OUT / "mcp-config.json"),
-        "--tools",
-        "",
-        "--permission-mode",
-        "dontAsk",
-        "--disable-slash-commands",
-        "--append-system-prompt",
-        instructions,
-        prompt,
-    ]
     env = {k: v for k, v in os.environ.items() if k not in PARENT_SESSION_VARIABLES} | {
         "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     }
     before = corpus_hashes()
     (OUT / "corpus-before.json").write_text(json.dumps(before, indent=2) + "\n")
-    try:
-        with (OUT / "events.jsonl").open("w") as events, (OUT / "stderr.log").open("w") as stderr:
+
+    def invoke(events, stderr, exit_file, settings_path, prompt, instructions):
+        command = [
+            "claude",
+            "--print",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--session-id",
+            str(uuid4()),
+            "--no-session-persistence",
+            "--setting-sources",
+            "",
+            "--settings",
+            str(settings_path),
+            "--strict-mcp-config",
+            "--mcp-config",
+            str(OUT / "mcp-config.json"),
+            "--tools",
+            "",
+            "--permission-mode",
+            "dontAsk",
+            "--disable-slash-commands",
+            "--append-system-prompt",
+            instructions,
+            prompt,
+        ]
+        with events.open("w") as out, stderr.open("w") as err:
             result = subprocess.run(
-                command, cwd=workspace, env=env, stdin=subprocess.DEVNULL, stdout=events, stderr=stderr, timeout=3600
+                command, cwd=workspace, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, timeout=3600
             )
-        (OUT / "run-exit.json").write_text(json.dumps({"returncode": result.returncode}, indent=2) + "\n")
+        exit_file.write_text(json.dumps({"returncode": result.returncode}, indent=2) + "\n")
         if result.returncode:
-            raise SystemExit(f"claude exited {result.returncode}; inspect stderr.log")
-        messages = [json.loads(line) for line in (OUT / "events.jsonl").read_text().splitlines() if line.strip()]
-        init = next(m for m in messages if m.get("type") == "system" and m.get("subtype") == "init")
-        inventory = {
-            key: init.get(key)
-            for key in ("claude_code_version", "model", "tools", "mcp_servers", "permissionMode", "memory_paths")
-        }
+            raise SystemExit(f"claude exited {result.returncode}; inspect {stderr.name}")
+        return [json.loads(line) for line in events.read_text().splitlines() if line.strip()]
+
+    try:
+        preflight = invoke(
+            OUT / "preflight-events.jsonl",
+            OUT / "preflight-stderr.log",
+            OUT / "preflight-exit.json",
+            OUT / "preflight-settings.json",
+            "Check readiness.",
+            RECALL_INSTRUCTIONS,
+        )
+        init, inventory = init_inventory(preflight)
         (OUT / "effective-tools.json").write_text(json.dumps(inventory, indent=2) + "\n")
         connected = any(s["name"] == "basic_memory" and s["status"] == "connected" for s in init["mcp_servers"])
         if "--outage" in sys.argv:
@@ -122,11 +133,29 @@ def main():
             if connected or init["tools"]:
                 raise SystemExit("Substituted outage command unexpectedly connected or exposed tools.")
             return
-        if set(init["tools"]) != ALLOWED_TOOLS or not connected:
-            raise SystemExit(f"Effective tool inventory failed: {init['tools']} {init['mcp_servers']}")
-        print("Verified effective tools: bm_read, bm_search", flush=True)
-        if preflight:
+        require_allowed_tools(init, connected)
+        print("Verified live inventory before evaluation: bm_read, bm_search", flush=True)
+        if "--verify-only" in sys.argv:
             return
+        if "--startup" in sys.argv:
+            prompt, instructions = STARTUP_PROMPT, STARTUP_INSTRUCTIONS
+        else:
+            prompt, instructions = RECALL_PROMPT + (ROOT / "evaluation/questions.json").read_text(), RECALL_INSTRUCTIONS
+        (OUT / "prompt.txt").write_text(prompt)
+        (OUT / "instructions.txt").write_text(instructions)
+        messages = invoke(
+            OUT / "events.jsonl",
+            OUT / "stderr.log",
+            OUT / "run-exit.json",
+            OUT / "client-settings.json",
+            prompt,
+            instructions,
+        )
+        run_init, _ = init_inventory(messages)
+        require_allowed_tools(
+            run_init,
+            any(s["name"] == "basic_memory" and s["status"] == "connected" for s in run_init["mcp_servers"]),
+        )
         final = messages[-1]
         if final.get("type") != "result" or final.get("subtype") != "success" or final.get("is_error"):
             raise SystemExit("Client turn did not complete; inspect events.jsonl")
