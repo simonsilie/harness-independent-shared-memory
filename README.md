@@ -1,12 +1,18 @@
 # Harness-independent shared memory
 
 Share project notes, personal preferences and work handovers between Codex,
-OpenCode and Claude Code. All three connect to the same local Basic Memory
-store over MCP, so a session can pick up where another left off. Other coding
-agents can connect to the same store if they support local MCP servers over
-stdio. Notes are Markdown, SQLite indexes them for text search, and the patched
-runtime runs without an embedding model. The repository includes the runtime
-build, backup and restore commands, and portable export.
+OpenCode and Claude Code. All three connect to the same local
+[Basic Memory](https://github.com/basicmachines-co/basic-memory) store over MCP,
+so a session can pick up where another left off. Other coding agents can connect
+to the same store if they support local MCP servers over stdio. Notes are
+Markdown, and SQLite indexes them for text search. The repository includes the
+runtime build, backup and restore commands, and portable export.
+
+We patch Basic Memory so that [storage and text search work without an AI model
+or external AI service](docs/adr/0007-model-independent-storage-and-text-search.md).
+A second patch lets agents discover existing projects over MCP while reserving
+[project creation](patches/README.md#mcp-project-creation) for the operator by
+default.
 
 ## Quick start
 
@@ -19,7 +25,7 @@ sync does not replace the patch.
 uv sync --locked
 uv run --locked --no-sync python build/semantic_runtime.py build
 uv pip install --python .venv/bin/python --no-deps \
-  build/dist/basic_memory-1.0.0+semantic.1-py3-none-any.whl
+  build/dist/basic_memory-1.0.0+semantic.2-py3-none-any.whl
 ```
 
 Run the setup script from the repository root to create a private
