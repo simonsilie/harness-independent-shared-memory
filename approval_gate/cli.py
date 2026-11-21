@@ -23,6 +23,7 @@ def show(proposal: dict[str, Any], arguments: dict[str, Any]) -> None:
     options = {key: value for key, value in arguments.items() if key != "content"}
     sys.stdout.write(
         f"Proposal: {proposal['id']}\n"
+        f"Project:  {json.dumps(proposal['project'])}\n"
         f"Source:   {json.dumps(proposal.get('source'))}\n"
         f"Expires:  {proposal['expires_at']}\n"
         f"Hash:     {proposal['content_hash']}\n"

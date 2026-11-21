@@ -58,7 +58,7 @@ def handle_write(request: dict[str, Any], config: Config, config_path: Path, cal
         temporary = temporary_arguments(arguments, call_native)
         if temporary is not None:
             return {**request, "params": {**request["params"], "arguments": temporary}}
-        proposal, created = create_or_reuse(config, arguments)
+        proposal, created = create_or_reuse(config, arguments, call_native)
     except ProposalError as error:
         audit(config, "write_refused", reason=str(error), id=request.get("id"))
         return tool_response(request, str(error), is_error=True)
@@ -120,11 +120,13 @@ def run_proxy(config: Config, config_path: Path) -> int:
         finally:
             with pending_lock:
                 pending.pop(request_id, None)
+        if "error" in reply:
+            raise ProposalError(f"Native {name} failed: {reply['error']}")
         result = reply.get("result")
         if not isinstance(result, dict):
             raise ProposalError(f"Native {name} did not return a tool result.")
         if result.get("isError"):
-            return {}
+            raise ProposalError(f"Native {name} refused: {result.get('content')}")
         data = result.get("structuredContent")
         if not isinstance(data, dict):
             raise ProposalError(f"Native {name} did not return structured data.")

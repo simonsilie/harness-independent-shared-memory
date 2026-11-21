@@ -5,7 +5,7 @@ from typing import Any
 
 from . import ProposalError
 from .config import Config
-from .native import native_write
+from .native import NativePreflightError, native_write
 from .proposals import (
     audit,
     expired,
@@ -32,6 +32,8 @@ def approve(
     proposal = load_proposal(config, proposal_id)
     _require_pending(proposal)
     arguments = write_arguments(proposal["arguments"])
+    if not proposal.get("project_external_id") or proposal["project_external_id"] != arguments.get("project"):
+        raise ProposalError("This proposal has no pinned project UUID. Submit the write again for approval.")
     if not confirm(proposal, arguments):
         audit(config, "approval_declined", proposal_id=proposal_id, project=proposal["project"])
         return False
@@ -46,6 +48,12 @@ def approve(
         audit(config, "proposal_applying", proposal_id=proposal_id, project=proposal["project"])
     try:
         native_write(config, arguments)
+    except NativePreflightError:
+        with proposal_lock(config):
+            proposal["status"] = "pending"
+            save_proposal(config, proposal)
+            audit(config, "proposal_preflight_failed", proposal_id=proposal_id, project=proposal["project"])
+        raise
     except (OSError, ValueError) as error:
         proposal["status"] = "outcome_unknown"
         save_proposal(config, proposal)

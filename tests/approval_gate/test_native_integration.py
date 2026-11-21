@@ -11,7 +11,7 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
-from approval_gate import cli
+from approval_gate import ProposalError, cli
 from approval_gate.config import Config
 from approval_gate.proposals import list_proposals
 
@@ -26,11 +26,15 @@ def store(tmp_path, monkeypatch):
     root = tmp_path / "store"
     state = root / "state"
     personal = root / "notes/personal"
-    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers"):
+    alpha = root / "notes/alpha"
+    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers", alpha):
         folder.mkdir(parents=True)
     (personal / "handovers/existing-durable.md").write_text(DURABLE)
     config = {
-        "projects": {"personal": {"path": str(personal), "mode": "local"}},
+        "projects": {
+            "personal": {"path": str(personal), "mode": "local"},
+            "alpha": {"path": str(alpha), "mode": "local"},
+        },
         "default_project": "personal",
         "database_backend": "sqlite",
         "database_url": None,
@@ -84,7 +88,7 @@ def proxy(store, tmp_path):
 def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     root, config, parameters = proxy
     target = root / "notes/personal/durable/decision.md"
-    arguments = {"content": DURABLE, "project": "personal", "identifier": "durable/decision.md"}
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "personal/durable/decision"}
 
     async def propose():
         async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
@@ -96,6 +100,15 @@ def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     assert not target.exists()
     (proposal,) = list_proposals(config)
     assert result.structured_content["result"]["proposal_id"] == proposal["id"]
+    assert proposal["arguments"]["identifier"] == "durable/decision.md"
+    constrained = config.model_copy(update={"env": (config.env or {}) | {"BASIC_MEMORY_MCP_PROJECT": "alpha"}})
+
+    with pytest.raises(ProposalError, match="address the approved project UUID"):
+        cli.command_approve(constrained, proposal["id"], confirm=lambda _: True)
+
+    assert list_proposals(config)[0]["status"] == "pending"
+    assert not target.exists()
+    assert not (root / "notes/alpha/durable/decision.md").exists()
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
 
     assert target.exists()

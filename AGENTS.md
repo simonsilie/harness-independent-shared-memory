@@ -80,6 +80,13 @@ others.
 - Verify stdio write gates by sending the request through the actual proxy to a
   disposable native store. Bound reply waits and assert the resulting store
   state (see `tests/approval_gate/test_native_integration.py`).
+- After a native Basic Memory write in a short-lived stdio session, close stdin
+  and wait for graceful exit with a deadline. Basic Memory drains accepted
+  writes during shutdown. Check the Markdown after process exit in integration
+  tests (see `approval_gate/native.py` and `tests/approval_gate/test_gate.py`).
+- Verify the approved project UUID in the native session that will execute
+  the write. `BASIC_MEMORY_MCP_PROJECT` can take precedence over an explicit
+  UUID (see `tests/approval_gate/test_native_integration.py`).
 - In stdio subprocess tests, set a deadline for each expected reply and
   terminate and reap the child on timeout. A live child can keep stdout open
   without replying. See the bounded MCP calls in

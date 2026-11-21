@@ -13,14 +13,13 @@ from typing import Any, Iterator
 
 from . import ProposalError
 from .config import Config
-from .writes import effective_metadata, write_arguments
+from .writes import NativeCall, effective_metadata, pin_durable_target
 
 
 def prepare(config: Config) -> None:
     config.proposals_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     config.proposals_dir.chmod(0o700)
     config.audit_log.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    config.audit_log.parent.chmod(0o700)
     if config.audit_log.exists():
         config.audit_log.chmod(0o600)
 
@@ -28,14 +27,11 @@ def prepare(config: Config) -> None:
 def audit(config: Config, event: str, **fields: Any) -> None:
     record = {"timestamp": utc_now(), "event": event, **fields}
     payload = (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    old_umask = os.umask(0o077)
-    try:
-        with config.audit_log.open("ab") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
-            stream.write(payload)
-            stream.flush()
-    finally:
-        os.umask(old_umask)
+    fd = os.open(config.audit_log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "ab") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        stream.write(payload)
+        stream.flush()
 
 
 @contextmanager
@@ -46,8 +42,8 @@ def proposal_lock(config: Config) -> Iterator[None]:
         yield
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+def utc_now(now: datetime | None = None) -> str:
+    return (now or datetime.now(timezone.utc)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def content_hash(content: str) -> str:
@@ -91,42 +87,43 @@ def list_proposals(config: Config) -> list[dict[str, Any]]:
     return proposals
 
 
-def expired(proposal: dict[str, Any]) -> bool:
+def expired(proposal: dict[str, Any], *, now: datetime | None = None) -> bool:
     try:
         deadline = datetime.fromisoformat(proposal["expires_at"].replace("Z", "+00:00"))
     except (KeyError, AttributeError, ValueError) as error:
         raise ProposalError(f"Proposal {proposal.get('id')} has an invalid expiry: {error}") from error
-    return datetime.now(timezone.utc) >= deadline
+    return (now or datetime.now(timezone.utc)) >= deadline
 
 
-def create_or_reuse(config: Config, arguments: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+def create_or_reuse(
+    config: Config, arguments: dict[str, Any], call_native: NativeCall, *, now: datetime | None = None
+) -> tuple[dict[str, Any], bool]:
     """Bind a durable write to a proposal, reusing an identical open one."""
-    project = arguments.get("project", arguments.get("project_id"))
-    if not isinstance(project, str) or not project.strip():
-        raise ProposalError("A durable write requires an explicit project.")
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ProposalError("A durable write requires string content.")
-    arguments = write_arguments(arguments)
+    project, arguments = pin_durable_target(arguments, call_native)
     payload = json.dumps(arguments, sort_keys=True)
     digest = content_hash(content)
     source = effective_metadata(arguments).get("source")
     with proposal_lock(config):
+        current_time = now or datetime.now(timezone.utc)
         for proposal in list_proposals(config):
             if (
                 proposal.get("status") == "pending"
-                and not expired(proposal)
+                and proposal.get("project_external_id") == arguments["project"]
+                and not expired(proposal, now=current_time)
                 and json.dumps(proposal.get("arguments"), sort_keys=True) == payload
             ):
                 return proposal, False
-        created = utc_now()
-        expires = (datetime.now(timezone.utc) + timedelta(hours=config.ttl_hours)).replace(microsecond=0)
+        expires = current_time + timedelta(hours=config.ttl_hours)
         proposal = {
             "id": uuid.uuid4().hex,
             "status": "pending",
-            "created_at": created,
-            "expires_at": expires.isoformat().replace("+00:00", "Z"),
+            "created_at": utc_now(current_time),
+            "expires_at": utc_now(expires),
             "project": project,
+            "project_external_id": arguments["project"],
             "content": content,
             "content_hash": digest,
             "source": None if source is None else str(source),

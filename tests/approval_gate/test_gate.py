@@ -1,6 +1,8 @@
 import json
+import stat
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from queue import Queue
 from threading import Thread
@@ -8,11 +10,13 @@ from threading import Thread
 import pytest
 
 from approval_gate import ProposalError, cli, proxy
+from approval_gate import native as native_transport
 from approval_gate.config import Config
 from approval_gate.proposals import (
     audit,
     create_or_reuse,
     expired,
+    list_proposals,
     load_proposal,
     prepare,
     save_proposal,
@@ -22,6 +26,16 @@ from approval_gate.writes import effective_metadata, temporary_arguments
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
 PROJECT_ID = "00000000-0000-4000-8000-000000000001"
+OTHER_PROJECT_ID = "00000000-0000-4000-8000-000000000002"
+
+
+def project_listing(_name, _arguments):
+    return {
+        "projects": [
+            {"name": "personal", "external_id": PROJECT_ID},
+            {"name": "alpha", "external_id": OTHER_PROJECT_ID},
+        ]
+    }
 
 
 def temporary_content() -> str:
@@ -43,10 +57,14 @@ def make_config(tmp_path: Path, native_command: list[str]) -> Config:
 
 FAKE_NATIVE = r"""
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 log = open(sys.argv[1], "a")
+mode = os.getenv("APPROVAL_GATE_FAKE_MODE")
+wrote = False
 projects = [{
     "name": "personal",
     "external_id": sys.argv[2],
@@ -63,14 +81,25 @@ for line in sys.stdin:
         result = {"content": [{"type": "text", "text": "ok"}], "isError": False}
         if params.get("name") == "bm_project":
             result["structuredContent"] = {"result": {"projects": projects}}
+        if params.get("name") == "bm_read":
+            result = {"content": [{"type": "text", "text": "Handover lookup failed"}], "isError": True}
+        if params.get("name") == "bm_write":
+            wrote = True
     elif method == "initialize":
         result = {"protocolVersion": "2024-11-05", "capabilities": {}, "serverInfo": {"name": "fake", "version": "1"}}
     else:
         result = {}
     log.flush()
+    if mode in (method, message.get("params", {}).get("name")) and mode is not None:
+        continue
     if "id" in message:
         sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}) + "\n")
         sys.stdout.flush()
+if wrote:
+    if mode == "shutdown":
+        time.sleep(60)
+    time.sleep(0.05)
+    Path(sys.argv[1]).with_suffix(".drained").write_text("materialized after EOF")
 """
 
 
@@ -121,14 +150,14 @@ def test_malformed_frontmatter_is_reported():
 def test_explicit_project_required_for_durable(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="explicit project"):
-        create_or_reuse(config, {"content": DURABLE, "identifier": "decision.md"})
+        create_or_reuse(config, {"content": DURABLE, "identifier": "decision.md"}, project_listing)
 
 
 def test_dedupe_matches_the_exact_write(tmp_path, native):
     config = make_config(tmp_path, native[0])
     args = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    first, created = create_or_reuse(config, args)
-    second, reused = create_or_reuse(config, args)
+    first, created = create_or_reuse(config, args, project_listing)
+    second, reused = create_or_reuse(config, args, project_listing)
     assert created and not reused
     assert first["id"] == second["id"]
     for change in (
@@ -137,7 +166,7 @@ def test_dedupe_matches_the_exact_write(tmp_path, native):
         {"metadata": {"tag": "other"}},
         {"expected_checksum": "another revision"},
     ):
-        distinct, created = create_or_reuse(config, args | change)
+        distinct, created = create_or_reuse(config, args | change, project_listing)
         assert created and distinct["id"] != first["id"]
     assert first["source"] == "session 42"
     assert first["content_hash"]
@@ -153,7 +182,7 @@ def test_concurrent_identical_writes_share_one_proposal(tmp_path, native):
 
     def create():
         try:
-            ids.append(create_or_reuse(config, args)[0]["id"])
+            ids.append(create_or_reuse(config, args, project_listing)[0]["id"])
         except Exception as error:  # noqa: BLE001 - collected for assertion
             errors.append(error)
 
@@ -167,15 +196,16 @@ def test_concurrent_identical_writes_share_one_proposal(tmp_path, native):
     assert len(set(ids)) == 1
 
 
-def test_expired_proposals_are_not_reused(tmp_path, native):
+def test_integration_expired_proposals_are_not_reused(tmp_path, native):
     config = make_config(tmp_path, native[0])
-    args = {"content": DURABLE, "project": "personal"}
-    proposal, _ = create_or_reuse(config, args)
-    proposal["expires_at"] = "2026-01-01T00:00:00Z"
-    save_proposal(config, proposal)
+    args = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    proposal, _ = create_or_reuse(config, args, project_listing, now=now)
+    deadline = now + timedelta(hours=config.ttl_hours)
 
-    assert expired(proposal)
-    fresh, created = create_or_reuse(config, args)
+    fresh, created = create_or_reuse(config, args, project_listing, now=deadline)
+
+    assert expired(proposal, now=deadline)
     assert created and fresh["id"] != proposal["id"]
 
 
@@ -193,14 +223,33 @@ def test_audit_log_is_jsonl(tmp_path, native):
     assert all(record["timestamp"].endswith("Z") for record in records)
 
 
-def test_prepare_enforces_private_permissions(tmp_path, native):
+def test_integration_prepare_enforces_private_permissions(tmp_path, native):
     config = make_config(tmp_path, native[0])
     config.proposals_dir.chmod(0o755)
     config.audit_log.write_text("")
     config.audit_log.chmod(0o644)
+    parent_mode = stat.S_IMODE(config.audit_log.parent.stat().st_mode)
+
     prepare(config)
+
     assert config.proposals_dir.stat().st_mode & 0o777 == 0o700
     assert config.audit_log.stat().st_mode & 0o777 == 0o600
+    assert stat.S_IMODE(config.audit_log.parent.stat().st_mode) == parent_mode
+
+
+def test_integration_audit_preserves_working_directory_permissions(tmp_path, native, monkeypatch):
+    working_directory = tmp_path / "workspace"
+    working_directory.mkdir()
+    working_directory.chmod(0o750)
+    monkeypatch.chdir(working_directory)
+    config = Config(native_command=native[0], proposals_dir=Path("proposals"), audit_log=Path("audit.jsonl"))
+
+    prepare(config)
+    audit(config, "first")
+
+    assert stat.S_IMODE(working_directory.stat().st_mode) == 0o750
+    assert stat.S_IMODE(config.proposals_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(config.audit_log.stat().st_mode) == 0o600
 
 
 def test_malformed_write_is_a_visible_tool_error(tmp_path, native):
@@ -214,7 +263,10 @@ def test_malformed_write_is_a_visible_tool_error(tmp_path, native):
 def test_write_notification_returns_visible_proposal_id(tmp_path, native):
     config = make_config(tmp_path, native[0])
     response = proxy.handle_write(
-        {"params": {"arguments": {"content": DURABLE, "project": "p"}}}, config, tmp_path / "config.json", lambda *_: {}
+        {"params": {"arguments": {"content": DURABLE, "project": "personal"}}},
+        config,
+        tmp_path / "config.json",
+        project_listing,
     )
     assert response["result"]["isError"]
     assert "Proposal" in response["result"]["content"][0]["text"]
@@ -308,6 +360,18 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
         process.stdin.flush()
         assert read_reply(replies, 5)["result"]["isError"]
         assert "result" in read_reply(replies, 6)
+
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "tools/call",
+                "params": {"name": "bm_write", "arguments": temporary_args | {"expected_checksum": "revision"}},
+            }
+        )
+        failure = read_reply(replies, 7)["result"]
+        assert failure["isError"]
+        assert "Handover lookup failed" in failure["content"][0]["text"]
     finally:
         process.stdin.close()
         try:
@@ -319,18 +383,20 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
     assert written == [temporary_args | {"project": PROJECT_ID, "overwrite": False}]
+    (proposal,) = list_proposals(config)
+    assert proposal["arguments"]["identifier"] == "decision.md"
 
 
-def test_owner_cli_approves_exact_arguments_through_native(tmp_path, native):
+def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path, native):
     native_command, log = native
     config = make_config(tmp_path, native_command)
     arguments = {
         "content": DURABLE,
         "project": "personal",
-        "identifier": "decision.md",
+        "identifier": "personal/decisions/decision",
         "expected_checksum": "sha256:abc",
     }
-    proposal, _ = create_or_reuse(config, arguments)
+    proposal, _ = create_or_reuse(config, arguments, project_listing)
 
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
 
@@ -338,14 +404,54 @@ def test_owner_cli_approves_exact_arguments_through_native(tmp_path, native):
     assert stored["status"] == "approved" and stored["approved_at"]
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
-    assert written == [arguments]
+    assert written == [arguments | {"project": PROJECT_ID, "identifier": "decisions/decision.md"}]
+    assert log.with_suffix(".drained").read_text() == "materialized after EOF"
     events = [json.loads(line)["event"] for line in config.audit_log.read_text().splitlines()]
     assert "proposal_created" in events and "proposal_approved" in events
 
 
+@pytest.mark.parametrize(
+    ("mode", "expected_status", "expected_error"),
+    [
+        ("initialize", "pending", "initialize timed out"),
+        ("bm_write", "outcome_unknown", "bm_write timed out"),
+        ("shutdown", "outcome_unknown", "timed out during graceful shutdown"),
+    ],
+)
+def test_integration_native_approval_failure(tmp_path, native, monkeypatch, mode, expected_status, expected_error):
+    config = make_config(tmp_path, native[0]).model_copy(update={"env": {"APPROVAL_GATE_FAKE_MODE": mode}})
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    monkeypatch.setattr(native_transport, "REQUEST_TIMEOUT", 1)
+    monkeypatch.setattr(native_transport, "SHUTDOWN_TIMEOUT", 1)
+
+    with pytest.raises(ProposalError, match=expected_error):
+        cli.command_approve(config, proposal["id"], confirm=lambda _: True)
+
+    stored = load_proposal(config, proposal["id"])
+    assert stored["status"] == expected_status
+    assert native[1].with_suffix(".drained").exists() is (mode == "bm_write")
+
+
+def test_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, native):
+    config = make_config(tmp_path, native[0])
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    legacy, _ = create_or_reuse(config, arguments, project_listing)
+    del legacy["project_external_id"]
+    legacy["arguments"]["project"] = "personal"
+    save_proposal(config, legacy)
+
+    with pytest.raises(ProposalError, match="no pinned project UUID"):
+        cli.command_approve(config, legacy["id"], confirm=lambda _: True)
+
+    proposal, created = create_or_reuse(config, arguments, project_listing)
+    assert created and proposal["id"] != legacy["id"]
+    assert proposal["arguments"]["project"] == PROJECT_ID
+
+
 def test_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
     config = make_config(tmp_path, native[0])
-    proposal, _ = create_or_reuse(config, {"content": DURABLE, "project": "personal"})
+    proposal, _ = create_or_reuse(config, {"content": DURABLE, "project": "personal"}, project_listing)
     assert cli.command_reject(config, proposal["id"]) == 0
     assert load_proposal(config, proposal["id"])["status"] == "rejected"
     with pytest.raises(ProposalError, match="already rejected"):
@@ -353,10 +459,10 @@ def test_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
 
 
 @pytest.mark.parametrize("change", ["reject", "expire", "approve"])
-def test_owner_cli_rechecks_proposal_after_confirmation(tmp_path, native, change):
+def test_integration_owner_cli_rechecks_proposal_after_confirmation(tmp_path, native, change):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal_id = create_or_reuse(config, arguments)[0]["id"]
+    proposal_id = create_or_reuse(config, arguments, project_listing)[0]["id"]
 
     def confirm(_prompt):
         if change == "reject":
@@ -379,7 +485,7 @@ def test_owner_cli_rechecks_proposal_after_confirmation(tmp_path, native, change
 def test_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "other.md", "expected_checksum": "revision"}
-    proposal_id = create_or_reuse(config, arguments)[0]["id"]
+    proposal_id = create_or_reuse(config, arguments, project_listing)[0]["id"]
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
     with pytest.raises(ProposalError, match="interactive terminal"):
@@ -394,4 +500,4 @@ def test_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
 def test_proposal_refuses_unconditional_overwrite(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="expected_checksum"):
-        create_or_reuse(config, {"content": DURABLE, "project": "personal", "overwrite": True})
+        create_or_reuse(config, {"content": DURABLE, "project": "personal", "overwrite": True}, project_listing)
