@@ -1,4 +1,4 @@
-# Basic Memory semantic-disable patch
+# Basic Memory runtime patches
 
 `basic-memory-semantic-disable.patch` adds `semantic_search_enabled` to the
 installed Basic Memory 1.0.0 source. With explicit owner approval, it was applied
@@ -38,16 +38,27 @@ selection and the shared vector-sync boundary. The patch is based on the install
 source, not an assumed upstream Git revision. Review and revalidate it when
 changing Basic Memory versions.
 
+## MCP project creation
+
+`basic-memory-mcp-project-create.patch` blocks `bm_project(command="create")`
+by default. `list`, `recent`, and the administrative `basic-memory project add`
+command remain available. To enable creation for a trusted MCP server, set
+`"enable_mcp_project_create": true` in the server's `config.json` or set
+`BASIC_MEMORY_ENABLE_MCP_PROJECT_CREATE=true` in its environment and restart it.
+
+The wheel below includes both patches. Install that wheel to make the setting
+available in the runtime used by the clients.
+
 ## Reproducible runtime build
 
-`build/semantic_runtime.py` combines the source pin and the patch into one
+`build/semantic_runtime.py` combines the source pin and both patches into one
 versioned wheel. It reads Basic Memory's version, wheel URL and SHA-256 from
-`uv.lock`, downloads that exact wheel, verifies the hash, applies the seven files
-with zero fuzz and repacks the result as `1.0.0+semantic.1`. The local version
+`uv.lock`, downloads that exact wheel, verifies the hash, applies both patches
+with zero fuzz and repacks the result as `1.0.0+semantic.2`. The local version
 suffix identifies this patch integration; increment `BUILD_REVISION` in the build
-script when the patch changes. Wheel entries are sorted and carry fixed
-timestamps, so a rebuild is byte-identical; the hashes of the pinned wheel, the
-patch and the output are recorded in `build/dist/manifest.json`. Pass
+script when a patch changes. Wheel entries are sorted and carry fixed
+timestamps, so a rebuild is byte-identical. The hashes of the pinned wheel, both
+patches and the output are recorded in `build/dist/manifest.json`. Pass
 `--wheel <pinned wheel>` to build from a local copy offline; the hash is still
 verified against the lock.
 

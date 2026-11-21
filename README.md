@@ -35,6 +35,10 @@ project. The script stops if the store already exists.
 Merge the server entry into each client's existing configuration. Replace the
 example paths with absolute paths to your checkout and store.
 
+The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
+available for `list` and `recent` while blocking project creation by default.
+Use `basic-memory project add` to add projects manually.
+
 **Codex** · `~/.codex/config.toml`
 
 ```toml

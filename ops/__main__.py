@@ -18,12 +18,17 @@ def main() -> None:
         command = commands.add_parser(name, help=help_text)
         command.add_argument("source", type=Path)
         command.add_argument("destination", type=Path)
+        if name == "restore":
+            command.add_argument(
+                "--expected-manifest-digest",
+                help="SHA-256 of manifest.json obtained from a trusted source",
+            )
     args = parser.parse_args()
     os.umask(0o077)
     if args.operation == "backup":
         backup(args.source, args.destination)
     elif args.operation == "restore":
-        restore(args.source, args.destination)
+        restore(args.source, args.destination, expected_manifest_digest=args.expected_manifest_digest)
     else:
         export(args.source, args.destination)
     print(args.destination)

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -162,3 +163,167 @@ def test_failed_restore_leaves_no_destination_and_can_be_retried(store, tmp_path
     assert (target / "manifest.json").exists()
     with sqlite3.connect(target / "state/memory.db") as connection:
         assert connection.execute("SELECT path FROM project").fetchone()[0] == str(target / "notes/personal")
+
+
+def test_empty_project_survives_round_trip(store, tmp_path):
+    empty = store / "notes/empty"
+    empty.mkdir()
+    config_path = store / "state/config.json"
+    config = json.loads(config_path.read_text())
+    config["projects"]["empty"] = {"path": str(empty), "mode": "local"}
+    config_path.write_text(json.dumps(config))
+    with sqlite3.connect(store / "state/memory.db") as connection:
+        connection.execute("INSERT INTO project VALUES (2, 'empty', ?)", (str(empty),))
+    before = inventory(store)
+
+    archive = tmp_path / "backup"
+    target = tmp_path / "restored"
+    backup(store, archive)
+    restore(archive, target)
+
+    assert inventory(store) == before
+    assert (archive / "notes/empty").is_dir()
+    assert (target / "notes/empty").is_dir()
+    with sqlite3.connect(target / "state/memory.db") as connection:
+        assert {row[0] for row in connection.execute("SELECT name FROM project")} == {"personal", "empty"}
+
+
+def test_restore_refuses_missing_empty_project_root(store, tmp_path):
+    empty = store / "notes/empty"
+    empty.mkdir()
+    config_path = store / "state/config.json"
+    config = json.loads(config_path.read_text())
+    config["projects"]["empty"] = {"path": str(empty), "mode": "local"}
+    config_path.write_text(json.dumps(config))
+    with sqlite3.connect(store / "state/memory.db") as connection:
+        connection.execute("INSERT INTO project VALUES (2, 'empty', ?)", (str(empty),))
+
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    expected = hashlib.sha256((archive / "manifest.json").read_bytes()).hexdigest()
+    (archive / "notes/empty").rmdir()
+
+    with pytest.raises(ValueError, match="Missing project root"):
+        restore(archive, tmp_path / "restore", expected_manifest_digest=expected)
+
+    assert not (tmp_path / "restore").exists()
+
+
+def test_restore_refuses_symlink_swapped_before_open(store, tmp_path, monkeypatch):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    victim = archive / "notes/personal/active.md"
+    real_open = os.open
+    swapped = False
+
+    def swap_then_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and path == "active.md" and kwargs.get("dir_fd") is not None:
+            swapped = True
+            victim.unlink()
+            victim.symlink_to(archive / "outside")
+        return real_open(path, flags, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "open", swap_then_open)
+        with pytest.raises(ValueError, match="Link or special file"):
+            restore(archive, tmp_path / "restore")
+
+    assert swapped
+    assert not (tmp_path / "restore").exists()
+
+
+def test_restore_refuses_file_symlink(store, tmp_path):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    (archive / "notes/personal/active.md").unlink()
+    (archive / "notes/personal/active.md").symlink_to(store / "notes/personal/active.md")
+    before = inventory(store)
+
+    with pytest.raises(ValueError, match="Link or special file"):
+        restore(archive, tmp_path / "restore")
+
+    assert not (tmp_path / "restore").exists()
+    assert not list(tmp_path.glob(".restore.*.tmp"))
+    assert inventory(store) == before
+
+
+def test_restore_does_not_follow_directory_symlink(store, tmp_path):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.md").write_text("outside content")
+    (archive / "notes/personal/leak").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="Link or special file"):
+        restore(archive, tmp_path / "restore")
+
+    assert not (tmp_path / "restore").exists()
+    assert not (tmp_path / "restore/notes/personal/leak/secret.md").exists()
+    assert not list(tmp_path.glob(".restore.*.tmp"))
+
+
+def test_restore_refuses_special_file(store, tmp_path):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    os.mkfifo(archive / "notes/personal/pipe")
+
+    with pytest.raises(ValueError, match="Link or special file"):
+        restore(archive, tmp_path / "restore")
+
+    assert not (tmp_path / "restore").exists()
+
+
+def test_restore_verifies_manifest_on_staging_copy(store, tmp_path, monkeypatch):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    before = inventory(archive)
+    original_copy_file = recovery._copy_file
+
+    def tamper(fd, target):
+        original_copy_file(fd, target)
+        if target.name == "active.md":
+            target.write_bytes(target.read_bytes() + b"tampered")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(recovery, "_copy_file", tamper)
+        with pytest.raises(ValueError, match="manifest mismatch"):
+            restore(archive, tmp_path / "restore")
+
+    assert not (tmp_path / "restore").exists()
+    assert not list(tmp_path.glob(".restore.*.tmp"))
+    assert inventory(archive) == before
+
+
+def test_restore_optional_manifest_digest(store, tmp_path):
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    expected = hashlib.sha256((archive / "manifest.json").read_bytes()).hexdigest()
+
+    restore(archive, tmp_path / "matching", expected_manifest_digest=expected)
+    assert (tmp_path / "matching/manifest.json").exists()
+
+    with pytest.raises(ValueError, match="Manifest digest mismatch"):
+        restore(archive, tmp_path / "wrong", expected_manifest_digest="0" * 64)
+    assert not (tmp_path / "wrong").exists()
+
+
+def test_cli_restore_accepts_expected_manifest_digest(store, tmp_path, monkeypatch):
+    from ops.__main__ import main
+
+    archive = tmp_path / "backup"
+    backup(store, archive)
+    expected = hashlib.sha256((archive / "manifest.json").read_bytes()).hexdigest()
+    target = tmp_path / "restored"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["ops", "restore", str(archive), str(target), "--expected-manifest-digest", expected],
+    )
+    original_umask = os.umask(0o077)
+    try:
+        main()
+    finally:
+        os.umask(original_umask)
+
+    assert (target / "manifest.json").exists()

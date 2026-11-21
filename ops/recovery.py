@@ -1,12 +1,16 @@
 """Same-version backup and isolated restore of a local Basic Memory store."""
 
+import errno
 import fcntl
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
+import stat
 import tempfile
-from contextlib import closing
+from collections.abc import Callable
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,8 +32,88 @@ def contained(root: Path, path: Path) -> Path:
     return resolved
 
 
+_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+
+
+def _open_entry(parent_fd: int, name: str, path: Path) -> tuple[bool, int]:
+    """Open a child relative to its parent directory, refusing links and special files."""
+    try:
+        fd = os.open(name, _OPEN_FLAGS, dir_fd=parent_fd)
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            raise ValueError(f"Link or special file in store: {path}") from error
+        raise
+    mode = os.fstat(fd).st_mode
+    if stat.S_ISDIR(mode):
+        return True, fd
+    if stat.S_ISREG(mode):
+        return False, fd
+    os.close(fd)
+    raise ValueError(f"Link or special file in store: {path}")
+
+
+@contextmanager
+def _closing_fd(fd: int):
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def _walk(root: Path, on_directory: Callable[[Path], None], on_file: Callable[[Path, int], None]) -> None:
+    """Traverse root through directory descriptors; callbacks get paths relative to root."""
+    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with _closing_fd(root_fd):
+        _walk_fd(root_fd, Path(), on_directory, on_file)
+
+
+def _walk_fd(
+    dir_fd: int, prefix: Path, on_directory: Callable[[Path], None], on_file: Callable[[Path, int], None]
+) -> None:
+    with os.scandir(dir_fd) as entries:
+        names = sorted(entry.name for entry in entries)
+    for name in names:
+        path = prefix / name
+        is_directory, fd = _open_entry(dir_fd, name, path)
+        with _closing_fd(fd):
+            if is_directory:
+                on_directory(path)
+                _walk_fd(fd, path, on_directory, on_file)
+            else:
+                on_file(path, fd)
+
+
+def _read_all(fd: int) -> bytes:
+    chunks = []
+    while chunk := os.read(fd, 1024 * 1024):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def inventory(root: Path) -> dict[str, str]:
-    return {str(p.relative_to(root)): digest(p) for p in sorted(root.rglob("*")) if p.is_file()}
+    files: dict[str, str] = {}
+
+    def record(relative: Path, fd: int) -> None:
+        files[str(relative)] = hashlib.sha256(_read_all(fd)).hexdigest()
+
+    _walk(root, lambda _: None, record)
+    return files
+
+
+def _copy_file(fd: int, target: Path) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    with os.fdopen(os.open(target, flags, 0o600), "wb") as stream:
+        while chunk := os.read(fd, 1024 * 1024):
+            stream.write(chunk)
+
+
+def _copy_tree(source: Path, destination: Path) -> None:
+    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _walk(
+        source,
+        lambda relative: (destination / relative).mkdir(mode=0o700, parents=True, exist_ok=True),
+        lambda relative, fd: _copy_file(fd, destination / relative),
+    )
 
 
 def validate_notes(root: Path, *, destination: Path | None = None) -> None:
@@ -48,6 +132,8 @@ def validate_notes(root: Path, *, destination: Path | None = None) -> None:
                 raise ValueError("Configured/database project paths differ")
             relative = stored_path.relative_to(destination) if destination is not None else stored_path
             project_root = contained(root, root / relative)
+            if not project_root.is_dir():
+                raise ValueError(f"Missing project root: {project_root}")
             notes = connection.execute("SELECT * FROM note_content WHERE project_id=?", (project["id"],)).fetchall()
             for note in notes:
                 path = contained(project_root, project_root / note["file_path"])
@@ -88,9 +174,7 @@ def backup(source: Path, destination: Path) -> None:
                 raise ValueError(f"Non-local project: {name}")
             path = contained(source, Path(project["path"]))
             relative = path.relative_to(source)
-            for child in path.rglob("*"):
-                contained(path, child)
-            shutil.copytree(path, staging / relative)
+            _copy_tree(path, staging / relative)
             project["path"] = str(relative)
         with (source / "observations/observations.jsonl").open("rb") as stream:
             fcntl.flock(stream, fcntl.LOCK_SH)
@@ -121,14 +205,13 @@ def backup(source: Path, destination: Path) -> None:
         raise
 
 
-def restore(archive: Path, destination: Path) -> None:
+def restore(archive: Path, destination: Path, *, expected_manifest_digest: str | None = None) -> None:
+    """Restore a backup, optionally checking manifest.json against a digest held in a trusted store.
+
+    Nothing in the archive is trusted until it has been copied into a private staging
+    directory and the complete manifest has been verified there.
+    """
     archive, destination = archive.resolve(), destination.resolve()
-    manifest = json.loads((archive / "manifest.json").read_text())
-    actual = inventory(archive)
-    del actual["manifest.json"]
-    if actual != manifest["files"]:
-        raise ValueError("Backup manifest mismatch")
-    validate_notes(archive)
     if destination.is_relative_to(archive) or archive.is_relative_to(destination):
         raise ValueError("Restore must be separate from the backup")
     if destination.exists():
@@ -136,7 +219,22 @@ def restore(archive: Path, destination: Path) -> None:
     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent))
     try:
-        shutil.copytree(archive, staging, dirs_exist_ok=True)
+        # Copy before verifying: the archive may change underneath us or be on mutable
+        # storage. Refusing links and special files here also stops copytree from
+        # pulling content from outside the archive via directory symlinks.
+        _copy_tree(archive, staging)
+        manifest_bytes = (staging / "manifest.json").read_bytes()
+        if (
+            expected_manifest_digest is not None
+            and hashlib.sha256(manifest_bytes).hexdigest() != expected_manifest_digest
+        ):
+            raise ValueError("Manifest digest mismatch")
+        manifest = json.loads(manifest_bytes)
+        actual = inventory(staging)
+        del actual["manifest.json"]
+        if actual != manifest["files"]:
+            raise ValueError("Backup manifest mismatch")
+        validate_notes(staging)
         config_path = staging / "state/config.json"
         config = json.loads(config_path.read_text())
         with closing(sqlite3.connect(staging / "state/memory.db")) as connection, connection:

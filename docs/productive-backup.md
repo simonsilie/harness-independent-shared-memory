@@ -60,12 +60,23 @@ uv run --locked --no-sync python -m ops restore \
   "$HOME/SharedMemoryRecovery/<identifier>"
 ```
 
-Restore requires a new destination. It checks the backup manifest, copies the
-files into a private sibling directory, and sets the final project paths in both
-SQLite and the configuration. After validating the staged files, it renames the
-directory into place. Never start native Basic Memory on
-the backup itself. To rebuild and check the restored text index, scope every
-native command to that destination, for example:
+Restore requires a new destination. It checks the complete backup manifest on a
+private copy of the files, before any project paths are rewritten, and sets the
+final project paths in both SQLite and the configuration. After validating the
+staged files, it renames the directory into place. Never start native Basic
+Memory on the backup itself. If a snapshot came back from mutable external
+storage, obtain the SHA-256 of its `manifest.json` over a trusted channel and
+pass it so the restored copy is checked against that value as well:
+
+```sh
+uv run --locked --no-sync python -m ops restore \
+  --expected-manifest-digest <digest> \
+  "$HOME/SharedMemoryBackups/<identifier>" \
+  "$HOME/SharedMemoryRecovery/<identifier>"
+```
+
+To rebuild and check the restored text index, scope every native command to
+that destination, for example:
 
 ```sh
 BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemoryRecovery/<identifier>/state" \

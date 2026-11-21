@@ -64,3 +64,13 @@ others.
   fresh Python process with imports of `basic_memory` and its submodules blocked.
   A before-and-after comparison of `sys.modules` can miss imports that reuse a
   module already cached by pytest (see `tests/ops/test_export_integration.py`).
+- When reviewing MCP permissions, check permitted subcommands as well as tool
+  names. In Basic Memory 1.0.0, `bm_project` supports both project discovery and
+  project creation (see `basic_memory/mcp/tools/projects.py` in the installed
+  package and the productive allowlist in `README.md`).
+- When copying from a mutable source, anchor traversal to an open descriptor for
+  a trusted root directory. Open children relative to their open parent with
+  `O_NOFOLLOW | O_NONBLOCK`, check their type with `fstat()`, and read regular
+  files through the same descriptor. Create the destination directory before
+  copying entries so empty directories are preserved (see `ops/recovery.py`
+  and `tests/ops/test_recovery_integration.py`).

@@ -18,11 +18,12 @@ from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = ROOT / "patches" / "basic-memory-semantic-disable.patch"
+PROJECT_CREATE_PATCH = ROOT / "patches" / "basic-memory-mcp-project-create.patch"
 LOCK = ROOT / "uv.lock"
 WATCHER = ROOT / "evaluation" / "native" / "mcp_watcher.py"
 DIST = ROOT / "build" / "dist"
 VERIFY_ENV = ROOT / "build" / ".verify-venv"
-BUILD_REVISION = "semantic.1"
+BUILD_REVISION = "semantic.2"
 PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "-p1", "-i", str(PATCH)]
 WHEEL_SUFFIX = "-py3-none-any.whl"
 
@@ -50,22 +51,27 @@ def download(url: str, expected_sha256: str) -> bytes:
 
 
 def patched_files() -> list[str]:
-    files = [line.removeprefix("--- a/") for line in PATCH.read_text().splitlines() if line.startswith("--- a/")]
-    if len(files) != 7:
-        raise ValueError(f"expected seven patched source files, found {len(files)}")
-    return files
+    return list(
+        dict.fromkeys(
+            line.removeprefix("--- a/")
+            for patch in (PATCH, PROJECT_CREATE_PATCH)
+            for line in patch.read_text().splitlines()
+            if line.startswith("--- a/")
+        )
+    )
 
 
-def apply_patch(root: Path) -> None:
-    existing = subprocess.run([*PATCH_ARGS, "--reverse", "--dry-run"], cwd=root, capture_output=True, text=True)
+def apply_patch(root: Path, patch: Path) -> None:
+    command = [*PATCH_ARGS[:-1], str(patch)]
+    existing = subprocess.run([*command, "--reverse", "--dry-run"], cwd=root, capture_output=True, text=True)
     if existing.returncode == 0:
-        raise ValueError("the pinned wheel already contains the semantic-disable patch")
-    applied = subprocess.run(PATCH_ARGS, cwd=root, capture_output=True, text=True)
+        raise ValueError(f"the pinned wheel already contains {patch.name}")
+    applied = subprocess.run(command, cwd=root, capture_output=True, text=True)
     if applied.returncode != 0:
-        raise RuntimeError(f"could not apply the semantic-disable patch: {applied.stderr or applied.stdout}")
-    reversed_check = subprocess.run([*PATCH_ARGS, "--reverse", "--dry-run"], cwd=root, capture_output=True, text=True)
+        raise RuntimeError(f"could not apply {patch.name}: {applied.stderr or applied.stdout}")
+    reversed_check = subprocess.run([*command, "--reverse", "--dry-run"], cwd=root, capture_output=True, text=True)
     if reversed_check.returncode != 0:
-        raise RuntimeError(f"the applied patch could not be verified: {reversed_check.stderr or reversed_check.stdout}")
+        raise RuntimeError(f"could not verify {patch.name}: {reversed_check.stderr or reversed_check.stdout}")
 
 
 def reversion(root: Path, base_version: str, build_version: str) -> None:
@@ -113,7 +119,8 @@ def package_wheel(source: Path, out_dir: Path, base_version: str, expected_sha25
                 if member.startswith("/") or ".." in Path(member).parts:
                     raise ValueError(f"unsafe wheel member: {member}")
             archive.extractall(root)
-        apply_patch(root)
+        apply_patch(root, PATCH)
+        apply_patch(root, PROJECT_CREATE_PATCH)
         reversion(root, base_version, build_version)
         pack(root, destination)
 
@@ -123,6 +130,7 @@ def package_wheel(source: Path, out_dir: Path, base_version: str, expected_sha25
         "build_revision": BUILD_REVISION,
         "patch_sha256": hashlib.sha256(PATCH.read_bytes()).hexdigest(),
         "patched_files": patched_files(),
+        "project_create_patch_sha256": hashlib.sha256(PROJECT_CREATE_PATCH.read_bytes()).hexdigest(),
         "wheel": destination.name,
         "wheel_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
         "wheel_version": build_version,
