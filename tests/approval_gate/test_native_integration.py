@@ -12,7 +12,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
 from approval_gate import cli
-from approval_gate.proposals import Config, list_proposals
+from approval_gate.config import Config
+from approval_gate.proposals import list_proposals
 
 DURABLE = (
     "---\ntitle: Gated decision\nkind: durable\nstatus: active\nsource: integration check\n---\n\nKeep SQLite local.\n"
@@ -73,7 +74,7 @@ def proxy(store, tmp_path):
     assert "APPROVAL_GATE_TEST_SECRET" not in json.loads(config_path.read_text())["env"]
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "approval_gate.gate", "--config", str(config_path)],
+        args=["-m", "approval_gate.proxy", "--config", str(config_path)],
         cwd=Path(__file__).resolve().parents[2],
         env={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
     )

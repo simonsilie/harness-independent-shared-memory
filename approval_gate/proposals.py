@@ -1,4 +1,4 @@
-"""Proposal store, classification and audit log for the durable-write gate."""
+"""File-backed approval proposals and their audit log."""
 
 import fcntl
 import hashlib
@@ -9,48 +9,11 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, Any, Iterator
+from typing import Any, Iterator
 
-from basic_memory.file_utils import ParseError, has_frontmatter, parse_frontmatter
-from basic_memory.utils import coerce_dict
-from loguru import logger
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, field_validator
-
-
-class ProposalError(ValueError):
-    """An invalid or unusable approval proposal."""
-
-
-def _expanduser(value: Any) -> Any:
-    return Path(value).expanduser() if isinstance(value, (str, Path)) else value
-
-
-class Config(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    native_command: list[str] = Field(min_length=1)
-    proposals_dir: Annotated[Path, BeforeValidator(_expanduser)]
-    audit_log: Annotated[Path, BeforeValidator(_expanduser)]
-    ttl_hours: int = Field(default=24, gt=0)
-    env: dict[str, str] | None = None
-
-    @field_validator("native_command")
-    @classmethod
-    def expand_native_executable(cls, command: list[str]) -> list[str]:
-        if command[0].startswith("~"):
-            return [str(Path(command[0]).expanduser()), *command[1:]]
-        return command
-
-
-def warn(message: str) -> None:
-    logger.warning("approval gate: {}", message)
-
-
-def load_config(path: Path) -> Config:
-    try:
-        return Config.model_validate(json.loads(path.read_text()))
-    except ValidationError as error:
-        raise ProposalError(f"Invalid config {path}: {error}") from error
+from . import ProposalError
+from .config import Config
+from .writes import effective_metadata, write_arguments
 
 
 def prepare(config: Config) -> None:
@@ -89,49 +52,6 @@ def utc_now() -> str:
 
 def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def effective_metadata(arguments: dict[str, Any]) -> dict[str, Any]:
-    content = arguments.get("content")
-    if not isinstance(content, str):
-        raise ProposalError("A write requires string content.")
-    try:
-        fields = parse_frontmatter(content) if has_frontmatter(content) else {}
-    except ParseError as error:
-        raise ProposalError(f"Malformed note frontmatter: {error}") from error
-    metadata = coerce_dict(arguments.get("metadata"))
-    if metadata is not None:
-        if not isinstance(metadata, dict):
-            raise ProposalError("Write metadata must be an object.")
-        fields.update(metadata)
-    return fields
-
-
-def valid_last_activity(value: Any) -> bool:
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str):
-        try:
-            parsed = datetime.fromisoformat(value)
-        except ValueError:
-            return False
-    else:
-        return False
-    return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
-
-
-def write_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
-    checksum = arguments.get("expected_checksum")
-    overwrite = arguments.get("overwrite")
-    if checksum is not None:
-        if not isinstance(checksum, str) or not checksum.strip() or overwrite is False:
-            raise ProposalError("Replacing a note requires its expected_checksum and permits overwrite.")
-        if overwrite is not None and overwrite is not True:
-            raise ProposalError("overwrite must be a boolean.")
-        return dict(arguments)
-    if overwrite is not None and overwrite is not False:
-        raise ProposalError("Replacing a note requires its expected_checksum.")
-    return {**arguments, "overwrite": False}
 
 
 def _proposal_path(config: Config, proposal_id: str) -> Path:

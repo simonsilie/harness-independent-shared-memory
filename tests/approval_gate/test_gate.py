@@ -7,18 +7,17 @@ from threading import Thread
 
 import pytest
 
-from approval_gate import cli, gate
+from approval_gate import ProposalError, cli, proxy
+from approval_gate.config import Config
 from approval_gate.proposals import (
-    Config,
-    ProposalError,
     audit,
     create_or_reuse,
-    effective_metadata,
     expired,
     load_proposal,
     prepare,
     save_proposal,
 )
+from approval_gate.writes import effective_metadata, temporary_arguments
 
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
@@ -93,16 +92,16 @@ def test_temporary_requires_metadata_and_safe_target(tmp_path):
         }
 
     args = {"content": temporary_content(), "identifier": "temporary/handover.md", "project": "personal"}
-    assert gate.temporary_arguments(args, call_native)
-    assert gate.temporary_arguments(args | {"identifier": "personal/handovers/note.md"}, call_native)
-    assert gate.temporary_arguments(args | {"identifier": None, "directory": "temporary", "title": "Note"}, call_native)
+    assert temporary_arguments(args, call_native)
+    assert temporary_arguments(args | {"identifier": "personal/handovers/note.md"}, call_native)
+    assert temporary_arguments(args | {"identifier": None, "directory": "temporary", "title": "Note"}, call_native)
     for overrides in (
         {"content": DURABLE},
         {"metadata": '{"kind":"durable"}'},
         {"content": temporary_content().replace("status: active", "status: archived")},
         {"content": temporary_content().replace(STAMP, "not-a-date")},
     ):
-        assert gate.temporary_arguments(args | overrides, call_native) is None
+        assert temporary_arguments(args | overrides, call_native) is None
     for target in (
         "durable/temporary/../../durable/decision.md",
         "temporary/../durable/decision.md",
@@ -111,7 +110,7 @@ def test_temporary_requires_metadata_and_safe_target(tmp_path):
         "temporary\\handover.md",
         "..",
     ):
-        assert gate.temporary_arguments(args | {"identifier": target}, call_native) is None, target
+        assert temporary_arguments(args | {"identifier": target}, call_native) is None, target
 
 
 def test_malformed_frontmatter_is_reported():
@@ -207,14 +206,14 @@ def test_prepare_enforces_private_permissions(tmp_path, native):
 def test_malformed_write_is_a_visible_tool_error(tmp_path, native):
     config = make_config(tmp_path, native[0])
     request = {"id": 1, "params": {"arguments": {"content": DURABLE, "identifier": "decision.md"}}}
-    response = gate.handle_write(request, config, tmp_path / "config.json", lambda *_: {})
+    response = proxy.handle_write(request, config, tmp_path / "config.json", lambda *_: {})
     assert response["result"]["isError"]
     assert [json.loads(line)["event"] for line in config.audit_log.read_text().splitlines()] == ["write_refused"]
 
 
 def test_write_notification_returns_visible_proposal_id(tmp_path, native):
     config = make_config(tmp_path, native[0])
-    response = gate.handle_write(
+    response = proxy.handle_write(
         {"params": {"arguments": {"content": DURABLE, "project": "p"}}}, config, tmp_path / "config.json", lambda *_: {}
     )
     assert response["result"]["isError"]
@@ -245,7 +244,7 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
         )
     )
     process = subprocess.Popen(
-        [sys.executable, "-m", "approval_gate.gate", "--config", str(config_path)],
+        [sys.executable, "-m", "approval_gate.proxy", "--config", str(config_path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,

@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from approval_gate.proposals import ProposalError, load_config
+from approval_gate import ProposalError
+from approval_gate.config import load_config
 
 BASE: dict[str, Any] = {
     "native_command": ["basic-memory", "mcp", "--transport", "stdio"],

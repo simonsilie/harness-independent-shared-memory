@@ -6,31 +6,20 @@ import shlex
 import subprocess
 import sys
 import threading
-from collections.abc import Callable
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import configargparse
-from basic_memory.mcp.project_context_identifiers import split_project_permalink_prefix
-from basic_memory.utils import generate_permalink, resolve_path_within_root, valid_project_path_value
 
-from .proposals import (
-    Config,
-    ProposalError,
-    audit,
-    create_or_reuse,
-    effective_metadata,
-    load_config,
-    prepare,
-    valid_last_activity,
-    warn,
-    write_arguments,
-)
+from . import ProposalError
+from .config import Config, load_config
+from .native import warn
+from .proposals import audit, create_or_reuse, prepare
+from .writes import NativeCall, temporary_arguments
 
 _stdout_lock = threading.Lock()
-type NativeCall = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 def emit(message: dict[str, Any]) -> None:
@@ -59,84 +48,6 @@ def _is_write(message: Any) -> bool:
         and isinstance(message.get("params"), dict)
         and message["params"].get("name") == "bm_write"
     )
-
-
-def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> dict[str, Any] | None:
-    fields = effective_metadata(arguments)
-    status = fields.get("status")
-    if fields.get("kind") != "temporary" or status not in ("active", "completed", "archived"):
-        return None
-    if status == "active" and not valid_last_activity(fields.get("last_activity")):
-        return None
-
-    project = arguments.get("project", arguments.get("project_id"))
-    identifier = arguments.get("identifier", arguments.get("file_path"))
-    directory = arguments.get("directory", arguments.get("folder", arguments.get("dir")))
-    value = identifier if identifier is not None else directory
-    if not isinstance(project, str) or not project.strip() or not isinstance(value, str):
-        return None
-    if identifier is not None and (directory is not None or value.endswith("/")):
-        return None
-    path = value.removeprefix("memory://").lstrip("/") if identifier is not None else value.strip("/")
-    if value.startswith("/") or any(character in path for character in ("\\", ":", "\x00")):
-        return None
-    if not valid_project_path_value(path) or not path:
-        return None
-    parts = PurePosixPath(path).parts
-    if not parts or not {"temporary", "handovers"}.intersection(parts):
-        return None
-
-    projects = call_native("bm_project", {"command": "list"}).get("projects", [])
-    project = project.strip()
-    matches = [entry for entry in projects if project in (entry.get("name"), entry.get("external_id"))]
-    if len(matches) != 1 or matches[0].get("source") != "local":
-        return None
-    selected = matches[0]
-    project_id = str(UUID(selected["external_id"]))
-    if identifier is not None and project != project_id:
-        selected_prefix = generate_permalink(selected["name"])
-        route = split_project_permalink_prefix(path, (generate_permalink(entry["name"]) for entry in projects))
-        if route is not None:
-            prefix, path = route
-            if prefix != selected_prefix:
-                return None
-
-    target = PurePosixPath(path)
-    if not target.parts or target.parts[0] not in {"temporary", "handovers"}:
-        return None
-    if identifier is not None:
-        if len(target.parts) < 2 or (target.suffix and target.suffix.lower() not in {".md", ".markdown"}):
-            return None
-        if not target.suffix:
-            target = target.with_suffix(".md")
-
-    root = Path(selected["local_path"]).expanduser().resolve()
-    try:
-        resolved = resolve_path_within_root(target.as_posix(), root)
-    except ValueError:
-        return None
-    if not resolved.is_relative_to(root / target.parts[0]):
-        return None
-
-    forwarded = write_arguments(arguments)
-    for key in ("project_id", "file_path", "folder", "dir", "identifier", "directory"):
-        forwarded.pop(key, None)
-    forwarded["project"] = project_id
-    forwarded["identifier" if identifier is not None else "directory"] = target.as_posix()
-
-    checksum = forwarded.get("expected_checksum")
-    if checksum is None:
-        return forwarded if status == "active" else None
-    if identifier is None:
-        return None
-    existing = call_native("bm_read", {"identifier": target.as_posix(), "project": project_id})
-    if existing.get("file_path") != target.as_posix() or not isinstance(existing.get("frontmatter"), dict):
-        return None
-    if existing["frontmatter"].get("kind") != "temporary":
-        return None
-    if existing.get("checksum") != checksum:
-        raise ProposalError("Revision conflict: the temporary note changed since it was read.")
-    return forwarded
 
 
 def handle_write(request: dict[str, Any], config: Config, config_path: Path, call_native: NativeCall) -> dict[str, Any]:
