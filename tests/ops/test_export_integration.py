@@ -280,3 +280,38 @@ def test_export_refuses_existing_destination(store: Path, tmp_path: Path) -> Non
 
     with pytest.raises(FileExistsError):
         export(store, destination)
+
+
+@pytest.mark.parametrize(
+    "bad_name", ["../outside", "../../etc", "a/b", "/tmp/absolute", "..", ".", "", "a\\b", "a\x00b"]
+)
+def test_export_rejects_unsafe_project_names(tmp_path: Path, bad_name: str) -> None:
+    source = tmp_path / "store"
+    state = source / "state"
+    state.mkdir(parents=True)
+    config = {
+        "projects": {
+            bad_name: {"path": str(source / "notes" / "bad"), "mode": "local"},
+            PERSONAL: {"path": str(source / "notes" / PERSONAL), "mode": "local"},
+        },
+        "default_project": PERSONAL,
+    }
+    (state / "config.json").write_text(json.dumps(config))
+    destination = tmp_path / "export"
+
+    with pytest.raises(ValueError):
+        export(source, destination)
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["store"]
+    assert not (tmp_path / "outside").exists()
+
+
+def test_export_multi_project_stays_within_bundle_root(store: Path, tmp_path: Path) -> None:
+    destination = tmp_path / "export"
+
+    assert export(store, destination) == destination
+
+    bundles = destination / "bundles"
+    assert {path.name for path in bundles.iterdir()} == {PERSONAL, ALPHA}
+    for name in (PERSONAL, ALPHA):
+        assert (bundles / name).resolve().is_relative_to(bundles)

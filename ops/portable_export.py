@@ -12,6 +12,12 @@ def export(source: Path, destination: Path) -> Path:
     source, destination = source.resolve(), destination.resolve()
     config = json.loads((source / "state/config.json").read_text())
     names = sorted(config["projects"])
+    bundles = destination / "bundles"
+    for name in names:
+        # A single safe path segment keeps every bundle target under bundles/;
+        # reject separators, absolute paths, backslashes and NUL bytes.
+        if not name or name in {".", ".."} or name != Path(name).name or any(c in name for c in ("\\", "\x00")):
+            raise ValueError(f"Unsafe project name: {name!r}")
     default = config.get("default_project", "personal")
     home = (source / Path(config["projects"][default]["path"])).resolve()
     env = os.environ | {
@@ -25,7 +31,7 @@ def export(source: Path, destination: Path) -> Path:
     executable = Path(sys.executable).with_name("basic-memory")
     for name in names:
         subprocess.run(
-            [str(executable), "okf", "export", str(destination / "bundles" / name), "--project", name, "--json"],
+            [str(executable), "okf", "export", str(bundles / name), "--project", name, "--json"],
             env=env,
             check=True,
         )
