@@ -427,6 +427,29 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
     assert "proposal_created" in events and "proposal_approved" in events
 
 
+def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, native):
+    native_command, log = native
+    config = make_config(tmp_path, native_command)
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    saved_audit = config.audit_log.rename(tmp_path / "saved-audit.jsonl")
+    config.audit_log.mkdir()
+
+    with pytest.raises(ProposalError, match="Could not record approval") as failure:
+        cli.command_approve(config, proposal["id"], confirm=lambda _: True)
+
+    assert isinstance(failure.value.__cause__, IsADirectoryError)
+    assert load_proposal(config, proposal["id"])["status"] == "pending"
+    assert not log.with_suffix(".drained").exists()
+
+    config.audit_log.rmdir()
+    saved_audit.rename(config.audit_log)
+
+    assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
+    assert load_proposal(config, proposal["id"])["status"] == "approved"
+    assert log.with_suffix(".drained").exists()
+
+
 @pytest.mark.parametrize(
     ("mode", "expected_status", "expected_error"),
     [

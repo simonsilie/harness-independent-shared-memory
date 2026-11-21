@@ -37,15 +37,19 @@ def approve(
     if not confirm(proposal, arguments):
         audit(config, "approval_declined", proposal_id=proposal_id, project=proposal["project"])
         return False
-    with proposal_lock(config):
-        current = load_proposal(config, proposal_id)
-        _require_pending(current)
-        if current != proposal:
-            raise ProposalError("Proposal changed during confirmation.")
-        # Reserve before calling the native server. A lost reply can follow a committed write.
-        proposal["status"] = "applying"
-        save_proposal(config, proposal)
-        audit(config, "proposal_applying", proposal_id=proposal_id, project=proposal["project"])
+    try:
+        with proposal_lock(config):
+            current = load_proposal(config, proposal_id)
+            _require_pending(current)
+            if current != proposal:
+                raise ProposalError("Proposal changed during confirmation.")
+            # Audit first so an audit I/O failure leaves an unsubmitted proposal retryable.
+            audit(config, "proposal_applying", proposal_id=proposal_id, project=proposal["project"])
+            # Reserve before calling the native server. A lost reply can follow a committed write.
+            proposal["status"] = "applying"
+            save_proposal(config, proposal)
+    except OSError as error:
+        raise ProposalError(f"Could not record approval for {proposal_id}: {error}") from error
     try:
         native_write(config, arguments)
     except NativePreflightError:
