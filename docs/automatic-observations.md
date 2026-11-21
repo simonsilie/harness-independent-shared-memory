@@ -52,15 +52,9 @@ consistently recognize observation opportunities or execute the recipe.
 
 ## Activation on 18 November 2026
 
-The owner approved applying the prepared common rules and checking both clients.
-Activation compared the live source and staged candidate against the manifest,
-then wrote only the approved addition to
-`$HOME/toolbox/dotfiles/agents/AGENTS.md`. Exact read-back passed, SHA-256
-`119058384c5f39f0aab600bbdd8ee196a76a18df3bbfcf9756b794ef569285f4`.
-The original is retained in `.state/observation-setup/AGENTS.before-activation.md`;
-`activation.json` records the time and destination. Both existing instruction
-symlinks point to this file. No client connection or unrelated configuration
-was changed. Fresh sessions load the shared addition.
+Activation added the shared rules to the Toolbox instructions. Both clients
+load the same file through their instruction symlinks. Staged copies, manifests
+and read-back evidence stay local.
 
 ## Actual client verification
 
@@ -98,8 +92,6 @@ inspected. No prompt asked either client to record an observation, and neither
 requested per-record approval. Each run's `result.json` confirms that productive
 notes, the historical corpus and the productive observation log were unchanged.
 
-The final common-file SHA-256 is
-`5cb21c565be5a5f968f0c993459522212801b6f47d7d5134d5b52567e0fbe447`.
 These are synthetic workflow checks, separate from real-project observations;
 they do not establish everyday usefulness or guarantee future agent compliance.
 The append concurrency check separately covers `no`/`failed` values and large
@@ -107,12 +99,5 @@ records; the real-client check does not manufacture a failed continuation.
 
 ## Productive observations
 
-As checked on 18 November 2026, the productive log contains one observation,
-recorded at `2026-11-18T06:12:51.948308+00:00`, of actual continuation of the
-`harness-independent-shared-memory/temporary/automatic-observations-activation`
-handover. It records activation of the approved shared rules and verification
-against disposable stores and logs; those checks used synthetic data, but this
-observation describes actual project work. Source: the productive
-`$HOME/SharedMemory/observations/observations.jsonl` and the retained recording
-script `.state/observation-setup/record-continuation.py`. The broader real-project
-observation review was completed on 21 November 2026; see [observation review](observation-review.md).
+The [observation review](observation-review.md) records the findings from
+ordinary use. Detailed observation records stay in the local log.

@@ -1,0 +1,12 @@
+{
+  "native_command": [
+    "/absolute/path/to/harness-independent-shared-memory/.venv/bin/basic-memory",
+    "mcp",
+    "--transport",
+    "stdio"
+  ],
+  "proposals_dir": "/absolute/path/to/SharedMemory/approvals",
+  "audit_log": "/absolute/path/to/SharedMemory/approval-audit.jsonl",
+  "ttl_hours": 24,
+  "env": {}
+}

@@ -26,4 +26,5 @@ build/.verify-venv/
 /evaluation/claude/mcp.json
 /evaluation/codex/config.toml
 /evaluation/opencode/opencode.json
+/approval_gate/config.json
 /evaluation/draft-corpus/

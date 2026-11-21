@@ -9,6 +9,7 @@ dependencies = [
     "basic-memory==1.0.0",
     "configargparse>=1.7.5",
     "loguru>=0.7",
+    "pydantic>=2",
 ]
 
 [dependency-groups]

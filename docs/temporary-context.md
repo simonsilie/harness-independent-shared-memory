@@ -22,15 +22,8 @@ completion and extension fields. Content remains until explicit owner-requested
 deletion. All updates use native `expected_checksum`; conflicts preserve the
 winning version. Durable promotion still requires separate chat approval.
 
-The approved shared file remains at `.state/lifecycle-setup/AGENTS.md`.
-Activation checked both original and staged SHA-256 values against the manifest
-before writing `$HOME/toolbox/dotfiles/agents/AGENTS.md`. The original is retained
-as `.state/lifecycle-setup/AGENTS.before-activation.md`; existing toolbox edits
-were preserved. The activated file was read back and matches SHA-256
-`42f6eb5f19c902e068cf2ffd1fb62aa8750f25aa635de29e6b5805083ef7e2dd`.
-`bin/link-dotfiles opencode codex` confirmed both instruction symlinks already
-point to this file; client configuration and launcher were unchanged. Start new
-sessions to load the addition.
+The lifecycle rules are part of the shared agent instructions. Start new
+sessions to load changes to those instructions. Activation evidence stays local.
 
 ## Verification
 
@@ -130,21 +123,12 @@ introduced, and Git reports no corpus changes. Only an uninterrupted invocation
 of the full probe writes its top-level `result.json`; the split retained checks
 above are the evidence for this session.
 
-## Approved session learning
+## Frontmatter reset
 
-Scoped active memory search found no existing note about native frontmatter
-reset. The owner separately approved saving this finding:
-**For native Basic Memory lifecycle updates, reset optional fields explicitly to
-YAML `null` in content frontmatter and read back the result; `bm_write` preserves
-omitted frontmatter fields. The separate `metadata` argument rejects nulls.**
-Project: `harness-independent-shared-memory`. Sources: the native probe and
-paired original/corrected restore traces above. The same convention is included
-in the activated shared AGENTS addition. The durable active note was saved via
-native `bm_write(overwrite=false)` in project
-`harness-independent-shared-memory` as
-`learnings/native-lifecycle-frontmatter-reset.md`, with sources and project
-context. Native read-back and scoped active durable text search verified it;
-checksum: `3820bab33456a331764be3d74fb49a54d14b6b03b581b0ecfea22b0c9c3fca54`.
+Reset optional lifecycle fields explicitly to YAML `null` in content
+frontmatter and read back the result. Native `bm_write` preserves omitted
+frontmatter fields. The separate `metadata` argument rejects nulls. The
+native probe and the restore checks above verify this behavior.
 
 ## Repository checks
 

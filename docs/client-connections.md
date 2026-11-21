@@ -23,6 +23,13 @@ semantic search off, automatic updates and Logfire off, polling-based file
 watching and private file permissions. Moving the checkout requires adjusting
 the launcher; rebuilding the environment requires reapplying the patch.
 
+The Toolbox also provides `bin/shared-memory-approval-gate` and
+`dotfiles/shared-memory/approval-gate.json` for the
+[durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
+The gate uses the same environment and runs `bin/shared-memory-mcp` as its
+native server. The installed environment must include the gate's Python
+dependencies before rollout. Activation changes the client launcher path.
+
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).
 Codex receives the resolved absolute launcher path. Its server is optional

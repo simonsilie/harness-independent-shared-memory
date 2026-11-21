@@ -1110,6 +1110,7 @@ dependencies = [
     { name = "basic-memory" },
     { name = "configargparse" },
     { name = "loguru" },
+    { name = "pydantic" },
 ]
 
 [package.dev-dependencies]
@@ -1124,6 +1125,7 @@ requires-dist = [
     { name = "basic-memory", specifier = "==1.0.0" },
     { name = "configargparse", specifier = ">=1.7.5" },
     { name = "loguru", specifier = ">=0.7" },
+    { name = "pydantic", specifier = ">=2" },
 ]
 
 [package.metadata.requires-dev]
