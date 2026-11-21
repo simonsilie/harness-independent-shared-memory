@@ -84,7 +84,14 @@ for line in sys.stdin:
             result["structuredContent"] = {"result": {"projects": projects}}
         if params.get("name") == "bm_read":
             result = {"content": [{"type": "text", "text": "Handover lookup failed"}], "isError": True}
-        if params.get("name") == "bm_write":
+        if params.get("name") == "bm_write" and mode == "unknown":
+            result = {
+                "content": [{"type": "text", "text": json.dumps({
+                    "error": "OUTCOME_UNKNOWN", "message": "The write may have happened."
+                })}],
+                "isError": True,
+            }
+        elif params.get("name") == "bm_write":
             arguments = params["arguments"]
             content = arguments["content"].encode()
             target = Path(projects[0]["local_path"]) / arguments["identifier"]
@@ -496,6 +503,7 @@ def test_integration_approval_succeeds_when_final_audit_append_fails(tmp_path, n
     [
         ("initialize", "pending", "initialize timed out"),
         ("bm_write", "outcome_unknown", "bm_write timed out"),
+        ("unknown", "outcome_unknown", "Check the native store.*OUTCOME_UNKNOWN"),
         ("shutdown", "outcome_unknown", "timed out during graceful shutdown"),
         ("stale", "outcome_unknown", "does not match the accepted revision"),
     ],

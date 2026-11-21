@@ -140,6 +140,37 @@ def test_approval_requires_the_accepted_markdown_revision(proxy):
     assert not (blocked_folder / "decision.md").exists()
 
 
+@pytest.mark.parametrize(
+    ("updates", "code"),
+    [({}, "ALREADY_EXISTS"), ({"expected_checksum": "stale-checksum"}, "REVISION_CONFLICT")],
+)
+def test_approval_records_definite_write_refusal(proxy, updates, code, capsys):
+    root, config, parameters = proxy
+    identifier = "handovers/existing-durable.md"
+    target = root / "notes/personal" / identifier
+    before = target.read_bytes()
+    arguments = {"content": DURABLE + "\nUpdated content.\n", "project": "personal", "identifier": identifier}
+
+    async def propose():
+        async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
+            await session.initialize()
+            return await session.call_tool("bm_write", arguments | updates)
+
+    result = asyncio.run(propose())
+    assert not result.is_error, result.content
+    (proposal,) = list_proposals(config)
+
+    with pytest.raises(ProposalError, match=f"^Native bm_write refused \\({code}\\):"):
+        cli.command_approve(config, proposal["id"], confirm=lambda _: True)
+
+    assert list_proposals(config)[0]["status"] == "refused"
+    assert target.read_bytes() == before
+    assert json.loads(config.audit_log.read_text().splitlines()[-1])["event"] == "proposal_refused"
+    capsys.readouterr()
+    assert cli.command_list(config) == 0
+    assert proposal["id"] not in capsys.readouterr().out
+
+
 def test_temporary_handover_lifecycle_uses_the_proxy(proxy):
     root, config, parameters = proxy
     target = root / "notes/personal/handovers/integration.md"

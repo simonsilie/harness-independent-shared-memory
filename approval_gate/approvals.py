@@ -5,7 +5,7 @@ from typing import Any
 
 from . import ProposalError
 from .config import Config
-from .native import NativePreflightError, native_write, warn
+from .native import NativePreflightError, NativeWriteRefused, native_write, warn
 from .proposals import (
     audit,
     expired,
@@ -53,10 +53,14 @@ def approve(
     try:
         native_write(config, arguments)
     except (OSError, ValueError) as error:
-        preflight_failed = isinstance(error, NativePreflightError)
-        status = "pending" if preflight_failed else "outcome_unknown"
-        event = "proposal_preflight_failed" if preflight_failed else "proposal_outcome_unknown"
-        message = str(error) if preflight_failed else f"Check the native store before proposing another write: {error}"
+        message = str(error)
+        if isinstance(error, NativePreflightError):
+            status, event = "pending", "proposal_preflight_failed"
+        elif isinstance(error, NativeWriteRefused):
+            status, event = "refused", "proposal_refused"
+        else:
+            status, event = "outcome_unknown", "proposal_outcome_unknown"
+            message = f"Check the native store before proposing another write: {error}"
         recorded_status = "applying"
         try:
             with proposal_lock(config):
@@ -67,7 +71,7 @@ def approve(
         except OSError as record_error:
             message += f" Could not finish recording the failure for proposal {proposal_id} ({recorded_status}): {record_error}"
         else:
-            if preflight_failed:
+            if isinstance(error, (NativePreflightError, NativeWriteRefused)):
                 raise
         raise ProposalError(message) from error
     proposal["status"] = "approved"

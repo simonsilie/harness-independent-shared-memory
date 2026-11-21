@@ -16,10 +16,24 @@ from .config import Config
 
 REQUEST_TIMEOUT = 20
 SHUTDOWN_TIMEOUT = 10
+DEFINITE_REFUSALS = {
+    "ALREADY_EXISTS",
+    "AMBIGUOUS",
+    "INVALID_ARGUMENTS",
+    "LOCKED",
+    "NOT_FOUND",
+    "OUTSIDE_PROJECT",
+    "REVISION_CONFLICT",
+    "UNSUPPORTED",
+}
 
 
 class NativePreflightError(ProposalError):
     """The native session failed before a write was submitted."""
+
+
+class NativeWriteRefused(ProposalError):
+    """The native server confirmed that it did not apply the write."""
 
 
 def warn(message: str) -> None:
@@ -80,9 +94,22 @@ async def _native_write(config: Config, arguments: dict[str, Any]) -> None:
                     result = reply.get("result")
                     if not isinstance(result, dict):
                         raise ProposalError(f"Native {label} reply had no result object.")
-                    if result.get("isError"):
-                        raise ProposalError(f"Native {label} refused: {result.get('content')}")
-                    return result
+                    if not result.get("isError"):
+                        return result
+                    content = result.get("content")
+                    match label, content:
+                        case "bm_write", [{"type": "text", "text": str(body)}]:
+                            with suppress(json.JSONDecodeError):
+                                match json.loads(body):
+                                    case {"error": str(code), "message": str(detail)} as refusal if (
+                                        code in DEFINITE_REFUSALS
+                                    ):
+                                        message = f"Native bm_write refused ({code}): {detail}"
+                                        suggestion = refusal.get("try_instead")
+                                        if isinstance(suggestion, str) and suggestion:
+                                            message += f" Try instead: {suggestion}"
+                                        raise NativeWriteRefused(message)
+                    raise ProposalError(f"Native {label} error: {content}")
                 raise ProposalError(f"Native MCP server closed before replying to {label}.")
         except TimeoutError as error:
             raise ProposalError(f"Native {label} timed out.") from error
