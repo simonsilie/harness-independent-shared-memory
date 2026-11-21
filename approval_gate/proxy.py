@@ -20,6 +20,7 @@ from .proposals import audit, create_or_reuse, prepare
 from .writes import NativeCall, temporary_arguments
 
 _stdout_lock = threading.Lock()
+ALLOWED_TOOLS = ("bm_project", "bm_read", "bm_search", "bm_write")
 
 
 def emit(message: dict[str, Any]) -> None:
@@ -39,15 +40,6 @@ def tool_response(
         "id": request.get("id"),
         "result": result,
     }
-
-
-def _is_write(message: Any) -> bool:
-    return (
-        isinstance(message, dict)
-        and message.get("method") == "tools/call"
-        and isinstance(message.get("params"), dict)
-        and message["params"].get("name") == "bm_write"
-    )
 
 
 def handle_write(request: dict[str, Any], config: Config, config_path: Path, call_native: NativeCall) -> dict[str, Any]:
@@ -141,20 +133,33 @@ def run_proxy(config: Config, config_path: Path) -> int:
                 if not line.strip():
                     continue
                 try:
-                    message = json.loads(line)
+                    payload = json.loads(line)
                 except json.JSONDecodeError as error:
                     warn(f"Dropping malformed client message: {error}")
                     continue
-                if isinstance(message, list):
-                    writes = [item for item in message if _is_write(item)]
-                    if writes:
-                        for item in writes:
-                            emit(tool_response(item, "Batched bm_write calls are not allowed", is_error=True))
-                        for item in message:
-                            if isinstance(item, dict) and not _is_write(item):
-                                send_native(item)
+                batch = isinstance(payload, list)
+                for message in payload if batch else [payload]:
+                    if not isinstance(message, dict):
                         continue
-                if _is_write(message) and isinstance(message, dict):
+                    if message.get("method") != "tools/call":
+                        send_native(message)
+                        continue
+                    params = message.get("params")
+                    if not isinstance(params, dict) or params.get("name") not in ALLOWED_TOOLS:
+                        emit(tool_response(message, "Tool is not allowed by the approval gate", is_error=True))
+                        continue
+                    name = params["name"]
+                    if name == "bm_project":
+                        arguments = params.get("arguments")
+                        if not isinstance(arguments, dict) or arguments.get("command") not in ("list", "recent"):
+                            emit(tool_response(message, "bm_project only allows list and recent", is_error=True))
+                            continue
+                    if name != "bm_write":
+                        send_native(message)
+                        continue
+                    if batch:
+                        emit(tool_response(message, "Batched bm_write calls are not allowed", is_error=True))
+                        continue
                     try:
                         response = handle_write(message, config, config_path, call_native)
                     except OSError as error:
@@ -165,9 +170,6 @@ def run_proxy(config: Config, config_path: Path) -> int:
                         emit(response)
                     else:
                         send_native(response)
-                    continue
-                native.stdin.write(line)
-                native.stdin.flush()
         except (BrokenPipeError, ValueError, OSError) as error:
             warn(f"Client-to-native relay stopped: {error}")
         finally:
@@ -190,6 +192,15 @@ def run_proxy(config: Config, config_path: Path) -> int:
                             replies = pending.pop(request_id, None)
                             if replies is not None:
                                 replies.put_nowait(reply)
+                        continue
+                    result = reply.get("result")
+                    if isinstance(result, dict) and isinstance(result.get("tools"), list):
+                        result["tools"] = [
+                            tool
+                            for tool in result["tools"]
+                            if isinstance(tool, dict) and tool.get("name") in ALLOWED_TOOLS
+                        ]
+                        emit(reply)
                         continue
                 with _stdout_lock:
                     sys.stdout.write(line)

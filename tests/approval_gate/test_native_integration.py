@@ -93,6 +93,8 @@ def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     async def propose():
         async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
             await session.initialize()
+            tools = await session.list_tools()
+            assert {tool.name for tool in tools.tools} == {"bm_project", "bm_read", "bm_search", "bm_write"}
             return await session.call_tool("bm_write", arguments)
 
     result = asyncio.run(propose())

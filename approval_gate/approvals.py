@@ -5,7 +5,7 @@ from typing import Any
 
 from . import ProposalError
 from .config import Config
-from .native import NativePreflightError, native_write
+from .native import NativePreflightError, native_write, warn
 from .proposals import (
     audit,
     expired,
@@ -73,13 +73,16 @@ def approve(
     proposal["status"] = "approved"
     proposal["approved_at"] = utc_now()
     save_proposal(config, proposal)
-    audit(
-        config,
-        "proposal_approved",
-        proposal_id=proposal_id,
-        project=proposal["project"],
-        content_hash=proposal["content_hash"],
-    )
+    try:
+        audit(
+            config,
+            "proposal_approved",
+            proposal_id=proposal_id,
+            project=proposal["project"],
+            content_hash=proposal["content_hash"],
+        )
+    except OSError as error:
+        warn(f"Could not record the final audit event for approved proposal {proposal_id}: {error}")
     return True
 
 

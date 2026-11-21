@@ -293,7 +293,7 @@ def read_reply(replies, expected_id):
             return reply
 
 
-def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp_path, native):
+def test_integration_proxy_gates_writes_and_allows_only_supported_tools(tmp_path, native):
     native_command, log = native
     config = make_config(tmp_path, native_command)
     config_path = tmp_path / "config.json"
@@ -350,6 +350,19 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
         send({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "bm_search", "arguments": {}}})
         assert "result" in read_reply(replies, 3)
 
+        edit = {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "bm_edit", "arguments": {}}}
+        send(edit)
+        assert read_reply(replies, 10)["result"]["isError"]
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {"name": "bm_project", "arguments": {"command": "create"}},
+            }
+        )
+        assert read_reply(replies, 11)["result"]["isError"]
+
         temporary_args = {"content": temporary_content(), "project": "personal", "identifier": "temporary/handover.md"}
         send(
             {
@@ -368,9 +381,9 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
             "params": {"name": "bm_write", "arguments": durable_args},
         }
         legit = {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "bm_search", "arguments": {}}}
-        process.stdin.write(json.dumps([batched_write, legit]) + "\n")
-        process.stdin.flush()
+        send([batched_write, edit | {"id": 12}, legit])
         assert read_reply(replies, 5)["result"]["isError"]
+        assert read_reply(replies, 12)["result"]["isError"]
         assert "result" in read_reply(replies, 6)
 
         send(
@@ -410,6 +423,8 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
             process.wait(timeout=5)
 
     calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert not any(entry.get("call") == "bm_edit" for entry in calls)
+    assert all(entry["arguments"]["command"] == "list" for entry in calls if entry.get("call") == "bm_project")
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
     assert written == [temporary_args | {"project": PROJECT_ID, "overwrite": False}]
     (proposal,) = list_proposals(config)
@@ -459,6 +474,19 @@ def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, nativ
     saved_audit.rename(config.audit_log)
 
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
+    assert load_proposal(config, proposal["id"])["status"] == "approved"
+    assert (tmp_path / "decision.md").read_text() == DURABLE
+
+
+def test_integration_approval_succeeds_when_final_audit_append_fails(tmp_path, native):
+    config = make_config(tmp_path, native[0])
+    config = config.model_copy(update={"env": {"APPROVAL_GATE_FAKE_BLOCK_AUDIT": str(config.audit_log)}})
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    proposal, _ = create_or_reuse(config, arguments, project_listing)
+
+    assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
+
+    assert config.audit_log.is_dir()
     assert load_proposal(config, proposal["id"])["status"] == "approved"
     assert (tmp_path / "decision.md").read_text() == DURABLE
 
