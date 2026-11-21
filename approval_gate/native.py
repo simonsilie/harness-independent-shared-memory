@@ -1,11 +1,14 @@
 """Native MCP transport for approved writes."""
 
 import asyncio
+import hashlib
 import json
 import os
 from contextlib import suppress
+from pathlib import Path
 from typing import Any
 
+from basic_memory.utils import resolve_path_within_root
 from loguru import logger
 
 from . import ProposalError
@@ -115,9 +118,17 @@ async def _native_write(config: Config, arguments: dict[str, Any]) -> None:
         matches = [project for project in projects if project.get("external_id") == arguments["project"]]
         if len(matches) != 1 or (listing.get("constrained_project") and len(projects) != 1):
             raise ProposalError("The native session cannot unambiguously address the approved project UUID.")
+        local_path = matches[0].get("local_path") if matches[0].get("source") == "local" else None
+        if matches[0].get("source") == "local" and (not isinstance(local_path, str) or not local_path):
+            raise ProposalError("The native session did not return the approved local project's path.")
 
         write_submitted = True
-        await call("tools/call", {"name": "bm_write", "arguments": arguments}, 3, "bm_write")
+        result = await call(
+            "tools/call",
+            {"name": "bm_write", "arguments": {**arguments, "output_format": "json"}},
+            3,
+            "bm_write",
+        )
         write_acknowledged = True
     except (OSError, ValueError) as error:
         if not write_submitted:
@@ -130,6 +141,23 @@ async def _native_write(config: Config, arguments: dict[str, Any]) -> None:
             if write_acknowledged:
                 raise
             warn(f"Could not shut down native MCP server: {error}")
+
+    if local_path is not None:
+        change = result.get("structuredContent")
+        if isinstance(change, dict):
+            change = change.get("result", change)
+        path = change.get("file_path") if isinstance(change, dict) else None
+        checksum = change.get("checksum") if isinstance(change, dict) else None
+        if not isinstance(path, str) or not path or not isinstance(checksum, str) or not checksum:
+            raise ProposalError("Native bm_write did not return a path and checksum for the accepted revision.")
+        try:
+            markdown = resolve_path_within_root(path, Path(local_path), allow_root=False)
+            with markdown.open("rb") as stream:
+                actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        except (OSError, ValueError) as error:
+            raise ProposalError(f"Could not verify the accepted Markdown revision at {path!r}: {error}") from error
+        if actual != checksum:
+            raise ProposalError(f"Markdown at {path!r} does not match the accepted revision.")
 
 
 def native_write(config: Config, arguments: dict[str, Any]) -> None:

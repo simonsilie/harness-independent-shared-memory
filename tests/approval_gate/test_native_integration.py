@@ -116,6 +116,28 @@ def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     assert list_proposals(config)[0]["status"] == "approved"
 
 
+def test_approval_requires_the_accepted_markdown_revision(proxy):
+    root, config, parameters = proxy
+    blocked_folder = root / "notes/personal/blocked"
+    blocked_folder.write_text("This path is a regular file.")
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "blocked/decision.md"}
+
+    async def propose():
+        async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
+            await session.initialize()
+            return await session.call_tool("bm_write", arguments)
+
+    result = asyncio.run(propose())
+    assert not result.is_error, result.content
+    (proposal,) = list_proposals(config)
+
+    with pytest.raises(ProposalError, match="Check the native store.*Could not verify the accepted Markdown revision"):
+        cli.command_approve(config, proposal["id"], confirm=lambda _: True)
+
+    assert list_proposals(config)[0]["status"] == "outcome_unknown"
+    assert not (blocked_folder / "decision.md").exists()
+
+
 def test_temporary_handover_lifecycle_uses_the_proxy(proxy):
     root, config, parameters = proxy
     target = root / "notes/personal/handovers/integration.md"

@@ -56,6 +56,7 @@ def make_config(tmp_path: Path, native_command: list[str]) -> Config:
 
 
 FAKE_NATIVE = r"""
+import hashlib
 import json
 import os
 import sys
@@ -64,7 +65,7 @@ from pathlib import Path
 
 log = open(sys.argv[1], "a")
 mode = os.getenv("APPROVAL_GATE_FAKE_MODE")
-wrote = False
+target = None
 projects = [{
     "name": "personal",
     "external_id": sys.argv[2],
@@ -84,7 +85,17 @@ for line in sys.stdin:
         if params.get("name") == "bm_read":
             result = {"content": [{"type": "text", "text": "Handover lookup failed"}], "isError": True}
         if params.get("name") == "bm_write":
-            wrote = True
+            arguments = params["arguments"]
+            content = arguments["content"].encode()
+            target = Path(projects[0]["local_path"]) / arguments["identifier"]
+            result["structuredContent"] = {"result": {
+                "file_path": arguments["identifier"],
+                "checksum": hashlib.sha256(content).hexdigest(),
+            }}
+            audit_path = os.getenv("APPROVAL_GATE_FAKE_BLOCK_AUDIT")
+            if audit_path:
+                Path(audit_path).unlink()
+                Path(audit_path).mkdir()
     elif method == "initialize":
         result = {"protocolVersion": "2024-11-05", "capabilities": {}, "serverInfo": {"name": "fake", "version": "1"}}
     else:
@@ -95,11 +106,12 @@ for line in sys.stdin:
     if "id" in message:
         sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}) + "\n")
         sys.stdout.flush()
-if wrote:
+if target is not None:
     if mode == "shutdown":
         time.sleep(60)
     time.sleep(0.05)
-    Path(sys.argv[1]).with_suffix(".drained").write_text("materialized after EOF")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"previous revision" if mode == "stale" else content)
 """
 
 
@@ -421,15 +433,16 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
     assert stored["status"] == "approved" and stored["approved_at"]
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
-    assert written == [arguments | {"project": PROJECT_ID, "identifier": "decisions/decision.md"}]
-    assert log.with_suffix(".drained").read_text() == "materialized after EOF"
+    assert written == [
+        arguments | {"project": PROJECT_ID, "identifier": "decisions/decision.md", "output_format": "json"}
+    ]
+    assert (tmp_path / "decisions/decision.md").read_text() == DURABLE
     events = [json.loads(line)["event"] for line in config.audit_log.read_text().splitlines()]
     assert "proposal_created" in events and "proposal_approved" in events
 
 
 def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, native):
-    native_command, log = native
-    config = make_config(tmp_path, native_command)
+    config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
     proposal, _ = create_or_reuse(config, arguments, project_listing)
     saved_audit = config.audit_log.rename(tmp_path / "saved-audit.jsonl")
@@ -440,14 +453,14 @@ def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, nativ
 
     assert isinstance(failure.value.__cause__, IsADirectoryError)
     assert load_proposal(config, proposal["id"])["status"] == "pending"
-    assert not log.with_suffix(".drained").exists()
+    assert not (tmp_path / "decision.md").exists()
 
     config.audit_log.rmdir()
     saved_audit.rename(config.audit_log)
 
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
     assert load_proposal(config, proposal["id"])["status"] == "approved"
-    assert log.with_suffix(".drained").exists()
+    assert (tmp_path / "decision.md").read_text() == DURABLE
 
 
 @pytest.mark.parametrize(
@@ -456,6 +469,7 @@ def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, nativ
         ("initialize", "pending", "initialize timed out"),
         ("bm_write", "outcome_unknown", "bm_write timed out"),
         ("shutdown", "outcome_unknown", "timed out during graceful shutdown"),
+        ("stale", "outcome_unknown", "does not match the accepted revision"),
     ],
 )
 def test_integration_native_approval_failure(tmp_path, native, monkeypatch, mode, expected_status, expected_error):
@@ -470,7 +484,26 @@ def test_integration_native_approval_failure(tmp_path, native, monkeypatch, mode
 
     stored = load_proposal(config, proposal["id"])
     assert stored["status"] == expected_status
-    assert native[1].with_suffix(".drained").exists() is (mode == "bm_write")
+    assert (tmp_path / "decision.md").exists() is (mode in {"bm_write", "stale"})
+
+
+def test_integration_approval_preserves_native_error_when_audit_fails(tmp_path, native, monkeypatch):
+    config = make_config(tmp_path, native[0])
+    config = config.model_copy(
+        update={"env": {"APPROVAL_GATE_FAKE_MODE": "bm_write", "APPROVAL_GATE_FAKE_BLOCK_AUDIT": str(config.audit_log)}}
+    )
+    arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
+    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    monkeypatch.setattr(native_transport, "REQUEST_TIMEOUT", 1)
+
+    with pytest.raises(ProposalError, match="Check the native store.*Native bm_write timed out") as failure:
+        cli.command_approve(config, proposal["id"], confirm=lambda _: True)
+
+    assert "Could not finish recording the failure" in str(failure.value)
+    assert "outcome_unknown" in str(failure.value)
+    assert isinstance(failure.value.__cause__, ProposalError)
+    assert load_proposal(config, proposal["id"])["status"] == "outcome_unknown"
+    assert (tmp_path / "decision.md").read_text() == DURABLE
 
 
 def test_integration_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, native):

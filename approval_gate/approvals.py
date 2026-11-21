@@ -52,17 +52,24 @@ def approve(
         raise ProposalError(f"Could not record approval for {proposal_id}: {error}") from error
     try:
         native_write(config, arguments)
-    except NativePreflightError:
-        with proposal_lock(config):
-            proposal["status"] = "pending"
-            save_proposal(config, proposal)
-            audit(config, "proposal_preflight_failed", proposal_id=proposal_id, project=proposal["project"])
-        raise
     except (OSError, ValueError) as error:
-        proposal["status"] = "outcome_unknown"
-        save_proposal(config, proposal)
-        audit(config, "proposal_outcome_unknown", proposal_id=proposal_id, project=proposal["project"])
-        raise ProposalError(f"Check the native store before proposing another write: {error}") from error
+        preflight_failed = isinstance(error, NativePreflightError)
+        status = "pending" if preflight_failed else "outcome_unknown"
+        event = "proposal_preflight_failed" if preflight_failed else "proposal_outcome_unknown"
+        message = str(error) if preflight_failed else f"Check the native store before proposing another write: {error}"
+        recorded_status = "applying"
+        try:
+            with proposal_lock(config):
+                proposal["status"] = status
+                save_proposal(config, proposal)
+                recorded_status = status
+                audit(config, event, proposal_id=proposal_id, project=proposal["project"])
+        except OSError as record_error:
+            message += f" Could not finish recording the failure for proposal {proposal_id} ({recorded_status}): {record_error}"
+        else:
+            if preflight_failed:
+                raise
+        raise ProposalError(message) from error
     proposal["status"] = "approved"
     proposal["approved_at"] = utc_now()
     save_proposal(config, proposal)
