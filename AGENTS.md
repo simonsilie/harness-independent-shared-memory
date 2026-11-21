@@ -8,6 +8,9 @@ run clients against Basic Memory and verify they used only the allowed
 corpus bytes unchanged. `evaluation/recall/score.py` grades the results.
 
 Write all repository documentation in English.
+Use synthetic data and placeholder paths in public documentation, tests and
+fixtures. Keep live notes, machine configuration and raw run evidence outside
+Git. Pass only the settings needed by a test when writing fixture configuration.
 
 ## Session Learnings
 
@@ -74,3 +77,6 @@ others.
   files through the same descriptor. Create the destination directory before
   copying entries so empty directories are preserved (see `ops/recovery.py`
   and `tests/ops/test_recovery_integration.py`).
+- Verify stdio write gates by sending the request through the actual proxy to a
+  disposable native store. Bound reply waits and assert the resulting store
+  state (see `tests/approval_gate/test_native_integration.py`).

@@ -1,13 +1,39 @@
 # Require technical approval for durable memory writes
 
-Durable notes must not become durable solely because an agent decided the owner would have approved them. Retrieved notes can carry prompt injection, and the chat convention in [ADR 0002](0002-agent-proposals-with-human-approval.md) cannot distinguish a genuine approval from a model's claim that one happened. This decision supersedes ADR 0002's choice of a workflow convention without a technical boundary. The owner still presents the exact proposed entry in the conversation, but the write only occurs after a separate, out-of-band owner action.
+Durable notes must not become durable solely because an agent decided the owner would have approved them. Retrieved notes can carry prompt injection, and the chat convention in [ADR 0002](0002-agent-proposals-with-human-approval.md) cannot distinguish a genuine approval from a model's claim that one happened. This decision supersedes ADR 0002's workflow convention for the productive MCP connection. The agent presents the proposed entry in chat and the owner confirms the write in a terminal they control.
 
-The boundary covers the MCP write path of the productive clients. A transparent stdio MCP proxy in front of the native Basic Memory server intercepts `bm_write` and forwards every other method unchanged; the engine is not patched. Direct shell, file and SQLite access remains possible and is a documented residual risk: this is a protocol-level gate, not an OS authorization boundary. `bm_edit` stays unexposed, and a durable write without an explicit `project` is refused so that every approval names a visible target.
+The boundary covers the MCP write path of the productive clients. A stdio MCP proxy in front of the native Basic Memory server intercepts `bm_write` and forwards other methods to the native engine. `bm_edit` stays unexposed, and a durable write without an explicit project is refused so that every approval names a visible target. The CLI requires terminal input and output to prevent confirmation through redirected streams. It trusts the operator of that terminal. Processes with access to the owner's shell, a pseudo-terminal, the proposal files or the store remain outside the protocol boundary.
 
-A write is temporary only when it carries `kind: temporary`, `status: active` and a valid UTC `last_activity` and targets the `temporary/` folder. Everything else is durable, including missing or ambiguous `kind` and overwrites of existing durable notes with `expected_checksum`. Automatic temporary lifecycle updates — activity extension, completion, archival and frontmatter reset — remain allowed without approval as long as the note stays in `temporary/` with `kind: temporary`. Durable content disguised as a temporary note is an accepted residual risk, recorded here rather than treated as a solved case.
+A temporary creation requires effective `kind: temporary`, `status: active` and a valid UTC `last_activity` in the `temporary/` or `handovers/` folder of an explicitly identified local project. The proxy uses the native project's external ID to pin routing and applies the native precedence of separate metadata over Markdown frontmatter. A checksum-conditional update can set `active`, `completed` or `archived` automatically when the existing revision is a temporary note at that exact path. This allows activity extension, completion, archival and restore. All other writes require approval. Durable content deliberately described as temporary remains an accepted residual risk.
 
-`bm_write` keeps its tool surface. For a durable target the proxy performs no store write and returns a normal tool result containing a `proposal_id` and a readable summary, not an error; the agent presents the proposal in chat and continues working. A proposal binds the canonical content hash, target project and source, expires after 24 hours, and is valid once. Identical content and project while a proposal is open return the same identifier. For updates, the `expected_checksum` observed when the proposal was created is revalidated when the approved write runs, so a stale approval cannot overwrite a newer revision ([ADR 0008](0008-concurrent-sessions-with-conflict-detection.md)).
+`bm_write` keeps its tool surface. For a durable target the proxy performs no store write and returns a normal tool result with the proposal identifier and approval command. The agent presents the proposal in chat and continues working. A proposal binds the full write arguments and their content hash, expires after 24 hours, and is valid once. Identical write arguments reuse an open proposal. Creation uses `overwrite: false`. Updates require `expected_checksum`, which the native engine revalidates when the approved write runs ([ADR 0008](0008-concurrent-sessions-with-conflict-detection.md)).
 
-The owner CLI lists, approves and rejects proposals. Before writing, it shows the exact content, project and source. An approved write is executed by that CLI through a one-shot call to the native MCP server, preserving checksum enforcement, indexing and frontmatter normalization. The proxy records proposal and approval events in a dedicated private JSONL file under `$HOME/SharedMemory`, separate from the [ADR 0012](0012-automatic-lightweight-handover-observations.md) observation log and written without `bm_write`, so refused attempts remain auditable.
+The owner CLI lists, approves and rejects proposals. Before confirming, the owner sees the content, source and all write arguments. After confirmation the CLI checks the proposal again and reserves it under the proposal lock before calling the native MCP server. This preserves checksum enforcement, indexing and frontmatter normalization. If the call is interrupted or its outcome is unknown, the reservation prevents a retry under the same proposal. Check the store before proposing the write again. Proposal and approval events go to a dedicated private JSONL file under `$HOME/SharedMemory`, separate from the [ADR 0012](0012-automatic-lightweight-handover-observations.md) observation log.
 
 The gate's code and its configuration template live in this repository, with the local configuration gitignored. The productive client connection is redirected to the gate by changing the existing tracked toolbox configurations, which keep absolute-path placeholders; operational and evaluation launchers keep using the native server. Switching the productive clients requires explicit owner approval and follows implementation and disposable-store verification. ADR 0002 remains as the historical decision, superseded by this one.
+
+## Proxy and approval flow
+
+```mermaid
+flowchart TD
+    client["Agent's MCP client"] --> proxy["stdio MCP proxy"]
+    proxy -->|"Other allowed calls"| native["Native Basic Memory MCP server"]
+    proxy -->|"bm_write"| classify{"Check the target and effective metadata"}
+
+    classify -->|"Eligible temporary write"| native
+    classify -->|"Invalid request"| error["Return a tool error"]
+    classify -->|"Durable write"| proposal["Create or reuse a proposal for the full write arguments"]
+    proposal --> present["Return proposal ID and approval command<br/>Agent presents the proposal in chat"]
+
+    subgraph terminal["Owner's interactive terminal"]
+        preview["Approval CLI shows the proposed write"] --> confirm{"Owner confirms?"}
+        confirm -->|"Yes"| reserve{"Proposal still pending and unexpired?"}
+        reserve -->|"Yes"| apply["Reserve the proposal once and call the native server"]
+    end
+
+    present -->|"Owner runs the command"| preview
+    confirm -->|"No"| stop["Stop without writing"]
+    reserve -->|"No"| stop
+    apply -->|"One-shot bm_write"| native
+    native -->|"Accepted writes"| store[("Memory store")]
+```

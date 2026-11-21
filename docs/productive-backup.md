@@ -93,43 +93,22 @@ a separate explicit operation; this drill does not switch their connections.
 
 ## Verification evidence
 
-On 21 November 2026, snapshot `20261121T075017Z` was created and restored
-under the same backup and recovery roots. Basic Memory rebuilt the text index
-for all six configured projects and indexed all 14 notes without errors.
-After reindexing, all project identities, note contents and checksums, and the
-observation log matched the snapshot. The backup still matched its manifest.
+The recovery drill restored an isolated copy. It verified project associations,
+note contents, checksums, lifecycle metadata and the observation log. Native
+reindexing rebuilt text search, and the backup still matched its manifest after
+verification. Keep snapshot identifiers and detailed results with the backup.
 
-### Initial recovery drill
-
-The final [result](../.state/productive-recovery/final/result.json),
-[verification script](../.state/productive-recovery/verify.py), native stdout,
-stderr and eleven inference/network guard records are retained privately under
-`.state/productive-recovery/`. No memory content is committed to Git.
-
-The productive snapshot contained five notes across `personal` and
-`harness-independent-shared-memory`: four durable notes and one completed,
-archived temporary handover. Restore preserved both project external identifiers
-and all native rows before indexing, with only project paths relocated. After
-explicitly emptying the restored text index, native `reindex --full --search`
-rebuilt it; all five notes passed native reads and project-scoped text searches.
-Bodies, checksums, revision counters, lifecycle metadata, ignore rules and the
-observation log survived. The live logical note/history state, live note/config/
-observation bytes and final backup manifest inventory matched before and after.
-The guards recorded zero inference imports and zero outbound connections.
-
-There were no active productive handovers at snapshot time.
 [Isolated integration tests](../tests/ops/test_recovery_integration.py)
-add active and archived temporary content, exercise WAL-only committed data and
-two successive restores, and reject unindexed Markdown, corrupted payloads and
-existing restore destinations.
+cover active and archived fixtures, WAL-only committed data and two successive
+restores. They also reject unindexed Markdown, corrupted payloads and existing
+restore destinations.
 
 The first drill exposed two constraints, with its artifacts retained alongside
 the final run: full native indexing updates technical timestamps, and a WAL-mode
 backup could acquire mutable sidecars during inspection. The final implementation
 closes database connections and converts the snapshot to rollback-journal mode;
 the WAL regression covers repeated inspection/restoration without changing the
-backup. The earlier `20261118T063500Z` directories are failed-drill evidence,
-not the established recovery copy.
+backup. Failed-drill artifacts stay with the local verification evidence.
 
 Final repository checks passed: 91 isolated tests and 24 integration tests
 (including the five new recovery cases), plus 31 subtests; Ruff lint/format,

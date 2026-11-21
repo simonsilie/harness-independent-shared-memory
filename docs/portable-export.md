@@ -1,12 +1,9 @@
 # Portable export
 
-On 18 November 2026 the productive `$HOME/SharedMemory` store was exported
-project by project into `$HOME/SharedMemoryExports/20261118T081638Z` and inspected
-without Basic Memory. The destination is outside repositories and indexed note
-roots. This implements the export requirement in
-[ADR 0009](adr/0009-portable-memory-export.md); it is separate from the
-[same-version backup and restoration](productive-backup.md) and the live store and
-client connections were unchanged.
+Export project by project into storage outside repositories and indexed note
+roots. Verify the Markdown and YAML output with an independent reader. This
+implements [ADR 0009](adr/0009-portable-memory-export.md) alongside the separate
+[same-version backup and restoration procedure](productive-backup.md).
 
 ## Export format
 
@@ -26,8 +23,7 @@ survive as directory names plus permalinks; there is no separate association fil
 Authored lifecycle metadata (`kind`, `status`, `last_activity`, `archive_reason`,
 `completed_at`, `archived_at`) is ordinary frontmatter and is exported verbatim.
 `bm.okf_export` records the exporter version and exported relations. Wiki links
-become standard Markdown links, and non-Markdown assets are preserved; the
-productive store currently has no attachments.
+become standard Markdown links, and non-Markdown assets are preserved.
 
 Exported files are private (`0600`, directories `0700`), matching the store.
 
@@ -57,34 +53,16 @@ new export after meaningful memory changes; there is no scheduler.
 
 ## Verification evidence
 
-The productive export contained both configured projects and all six notes: five
-durable notes (two personal defaults, three project learnings) and one completed
-and archived project handover. There were **no active productive handovers** at
-export time; the archived handover was exported with its full body and lifecycle
-fields. Every bundle passed `okf check` with no diagnostics, and every exported
-file set matched the native database's configured project and note file set.
-Export runs recorded zero inference imports and zero outbound connections; live
-note, configuration and observation-log inventories were identical before and
-after, as was a complete logical dump of every database table, including
-revisions and history.
+The export verification confirmed that each bundle passed `okf check`, that
+project associations were preserved and that the live store was unchanged.
+Detailed export evidence stays with the local verification run.
 
-An isolated fixture, now retained as the committed
-[integration test](../tests/ops/test_export_integration.py), covered content
-missing from the productive store: one active personal handover, one active but
-expired project handover, and one archived project handover, plus durable notes
-in both projects. Handover timestamps are
-generated relative to execution time; the check asserts that the active handover
-lies inside the seven-day window and the expired one outside it, so the fixture
-does not silently age into a different lifecycle state. All bodies and metadata,
-including archive fields and the old `last_activity`, survived; each note stayed
-in its own project bundle with no cross-project leakage.
-
-For usability outside Basic Memory, a reader using only Python's standard library
-and a generic YAML parser parsed the bundle indexes, frontmatter and bodies
-without importing `basic_memory`, then answered scoped queries directly from the
-Markdown. A personal-only query found the Python guidelines and a project-scoped
-query for the same text returned nothing; the archived handover was found through
-its frontmatter. No search index, database or native code was involved.
+The [integration test](../tests/ops/test_export_integration.py) uses disposable
+projects with active, expired and archived handovers alongside durable notes.
+The fixture generates activity timestamps relative to execution time and
+verifies that bodies and lifecycle metadata survive in the correct project
+bundle. An independent reader parses Markdown and YAML and answers scoped
+queries directly from the export files.
 
 ## Limits
 
