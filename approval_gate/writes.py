@@ -134,8 +134,8 @@ def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> d
         return None
     if identifier is not None and (directory is not None or value.endswith("/")):
         return None
-    path = value.removeprefix("memory://").lstrip("/") if identifier is not None else value.strip("/")
-    if value.startswith("/") or any(character in path for character in ("\\", ":", "\x00")):
+    path = memory_url_path(value).lstrip("/") if identifier is not None else value.strip("/")
+    if any(character in path for character in ("\\", ":", "\x00")):
         return None
     if not valid_project_path_value(path) or not path:
         return None

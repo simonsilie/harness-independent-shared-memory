@@ -130,12 +130,16 @@ def create_or_reuse(
             "arguments": arguments,
         }
         save_proposal(config, proposal)
-        audit(
-            config,
-            "proposal_created",
-            proposal_id=proposal["id"],
-            project=project,
-            content_hash=digest,
-            source=proposal["source"],
-        )
+        try:
+            audit(
+                config,
+                "proposal_created",
+                proposal_id=proposal["id"],
+                project=project,
+                content_hash=digest,
+                source=proposal["source"],
+            )
+        except OSError:
+            _proposal_path(config, proposal["id"]).unlink()
+            raise
         return proposal, True

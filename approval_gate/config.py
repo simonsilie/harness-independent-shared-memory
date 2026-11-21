@@ -31,7 +31,16 @@ class Config(BaseModel):
 
 
 def load_config(path: Path) -> Config:
+    path = path.resolve()
     try:
-        return Config.model_validate(json.loads(path.read_text()))
+        config = Config.model_validate(json.loads(path.read_text()))
     except ValidationError as error:
         raise ProposalError(f"Invalid config {path}: {error}") from error
+    executable, *args = config.native_command
+    return config.model_copy(
+        update={
+            "proposals_dir": path.parent / config.proposals_dir,
+            "audit_log": path.parent / config.audit_log,
+            "native_command": [str(path.parent / executable) if "/" in executable else executable, *args],
+        }
+    )

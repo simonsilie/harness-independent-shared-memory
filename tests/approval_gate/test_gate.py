@@ -112,7 +112,7 @@ def native(tmp_path):
     return [sys.executable, str(script), str(log), PROJECT_ID], log
 
 
-def test_temporary_requires_metadata_and_safe_target(tmp_path):
+def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
     def call_native(_name, _arguments):
         return {
             "projects": [
@@ -147,13 +147,13 @@ def test_malformed_frontmatter_is_reported():
         effective_metadata({"content": "---\ntitle: [unclosed\n---\nbody"})
 
 
-def test_explicit_project_required_for_durable(tmp_path, native):
+def test_integration_explicit_project_required_for_durable(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="explicit project"):
         create_or_reuse(config, {"content": DURABLE, "identifier": "decision.md"}, project_listing)
 
 
-def test_dedupe_matches_the_exact_write(tmp_path, native):
+def test_integration_dedupe_matches_the_exact_write(tmp_path, native):
     config = make_config(tmp_path, native[0])
     args = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
     first, created = create_or_reuse(config, args, project_listing)
@@ -172,7 +172,7 @@ def test_dedupe_matches_the_exact_write(tmp_path, native):
     assert first["content_hash"]
 
 
-def test_concurrent_identical_writes_share_one_proposal(tmp_path, native):
+def test_integration_concurrent_identical_writes_share_one_proposal(tmp_path, native):
     import threading
 
     config = make_config(tmp_path, native[0])
@@ -214,7 +214,7 @@ def test_invalid_expiry_is_reported():
         expired({"id": "broken"})
 
 
-def test_audit_log_is_jsonl(tmp_path, native):
+def test_integration_audit_log_is_jsonl(tmp_path, native):
     config = make_config(tmp_path, native[0])
     audit(config, "first", proposal_id="a")
     audit(config, "second", proposal_id="b")
@@ -252,7 +252,7 @@ def test_integration_audit_preserves_working_directory_permissions(tmp_path, nat
     assert stat.S_IMODE(config.audit_log.stat().st_mode) == 0o600
 
 
-def test_malformed_write_is_a_visible_tool_error(tmp_path, native):
+def test_integration_malformed_write_is_a_visible_tool_error(tmp_path, native):
     config = make_config(tmp_path, native[0])
     request = {"id": 1, "params": {"arguments": {"content": DURABLE, "identifier": "decision.md"}}}
     response = proxy.handle_write(request, config, tmp_path / "config.json", lambda *_: {})
@@ -260,7 +260,7 @@ def test_malformed_write_is_a_visible_tool_error(tmp_path, native):
     assert [json.loads(line)["event"] for line in config.audit_log.read_text().splitlines()] == ["write_refused"]
 
 
-def test_write_notification_returns_visible_proposal_id(tmp_path, native):
+def test_integration_write_notification_returns_visible_proposal_id(tmp_path, native):
     config = make_config(tmp_path, native[0])
     response = proxy.handle_write(
         {"params": {"arguments": {"content": DURABLE, "project": "personal"}}},
@@ -289,8 +289,8 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
         json.dumps(
             {
                 "native_command": native_command,
-                "proposals_dir": str(config.proposals_dir),
-                "audit_log": str(config.audit_log),
+                "proposals_dir": config.proposals_dir.name,
+                "audit_log": config.audit_log.name,
                 "ttl_hours": 24,
             }
         )
@@ -372,6 +372,23 @@ def test_integration_proxy_gates_durable_writes_and_forwards_everything_else(tmp
         failure = read_reply(replies, 7)["result"]
         assert failure["isError"]
         assert "Handover lookup failed" in failure["content"][0]["text"]
+
+        config.audit_log.unlink()
+        config.audit_log.mkdir()
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "tools/call",
+                "params": {"name": "bm_write", "arguments": durable_args | {"identifier": "another.md"}},
+            }
+        )
+        failure = read_reply(replies, 8)["result"]
+        assert failure["isError"]
+        assert config.audit_log.name in failure["content"][0]["text"]
+
+        send({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "bm_search", "arguments": {}}})
+        assert not read_reply(replies, 9)["result"]["isError"]
     finally:
         process.stdin.close()
         try:
@@ -433,7 +450,7 @@ def test_integration_native_approval_failure(tmp_path, native, monkeypatch, mode
     assert native[1].with_suffix(".drained").exists() is (mode == "bm_write")
 
 
-def test_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, native):
+def test_integration_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, native):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
     legacy, _ = create_or_reuse(config, arguments, project_listing)
@@ -449,7 +466,7 @@ def test_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, 
     assert proposal["arguments"]["project"] == PROJECT_ID
 
 
-def test_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
+def test_integration_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
     config = make_config(tmp_path, native[0])
     proposal, _ = create_or_reuse(config, {"content": DURABLE, "project": "personal"}, project_listing)
     assert cli.command_reject(config, proposal["id"]) == 0
@@ -482,7 +499,7 @@ def test_integration_owner_cli_rechecks_proposal_after_confirmation(tmp_path, na
     assert sum(entry.get("call") == "bm_write" for entry in calls) == int(change == "approve")
 
 
-def test_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
+def test_integration_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "other.md", "expected_checksum": "revision"}
     proposal_id = create_or_reuse(config, arguments, project_listing)[0]["id"]
@@ -497,7 +514,7 @@ def test_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
     assert native[1].read_text() == ""
 
 
-def test_proposal_refuses_unconditional_overwrite(tmp_path, native):
+def test_integration_proposal_refuses_unconditional_overwrite(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="expected_checksum"):
         create_or_reuse(config, {"content": DURABLE, "project": "personal", "overwrite": True}, project_listing)

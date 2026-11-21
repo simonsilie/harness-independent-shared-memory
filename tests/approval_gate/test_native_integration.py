@@ -125,7 +125,7 @@ def test_temporary_handover_lifecycle_uses_the_proxy(proxy):
             "---\n\nResume this work.\n"
         ),
         "project": "personal",
-        "identifier": "personal/handovers/integration.md",
+        "identifier": "/handovers/integration.md",
     }
 
     async def wait_for_content(*lines):

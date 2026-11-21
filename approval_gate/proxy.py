@@ -155,7 +155,12 @@ def run_proxy(config: Config, config_path: Path) -> int:
                                 send_native(item)
                         continue
                 if _is_write(message) and isinstance(message, dict):
-                    response = handle_write(message, config, config_path, call_native)
+                    try:
+                        response = handle_write(message, config, config_path, call_native)
+                    except OSError as error:
+                        response = tool_response(
+                            message, f"Approval gate could not process bm_write: {error}", is_error=True
+                        )
                     if "result" in response:
                         emit(response)
                     else:
