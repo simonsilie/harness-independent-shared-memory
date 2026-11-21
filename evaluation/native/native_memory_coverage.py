@@ -8,13 +8,14 @@ from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path
 
+from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).parent / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-native-coverage")
 OUT.mkdir(parents=True)
-print(f"Native memory coverage artifacts: {OUT}", flush=True)
+logger.info(f"Native memory coverage artifacts: {OUT}")
 assert version("basic-memory") == "1.0.0"
 state = OUT / "state"
 state.mkdir()
@@ -219,4 +220,4 @@ dump(
         "limits": "Disposable native MCP/API check with sqlite_vec fallback guard; no productive configuration or automatic lifecycle, no elapsed seven-day test or client instruction verification.",
     },
 )
-print((OUT / "result.json").read_text())
+sys.stdout.write((OUT / "result.json").read_text() + "\n")

@@ -1,6 +1,8 @@
-import argparse
 import json
+import sys
 from pathlib import Path
+
+import configargparse
 
 
 def score(questions, results):
@@ -34,15 +36,21 @@ def score(questions, results):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Score one client recall run, not the full phase 1A gate.")
-    parser.add_argument("results", type=Path)
+    parser = configargparse.ArgumentParser(description="Score one client recall run, not the full phase 1A gate.")
+    parser.add_argument("results", type=Path, nargs="?")
+    parser.add_argument(
+        "--results", dest="configured_results", type=Path, metavar="PATH", env_var="SHARED_MEMORY_RECALL_RESULTS"
+    )
     args = parser.parse_args()
+    results_path = args.results or args.configured_results
+    if results_path is None:
+        parser.error("results is required")
     questions = json.loads((Path(__file__).resolve().parents[1] / "scoring" / "answer-key.json").read_text())
     try:
-        result = score(questions, json.loads(args.results.read_text()))
+        result = score(questions, json.loads(results_path.read_text()))
     except (ValueError, KeyError, TypeError) as error:
         parser.error(str(error))
-    print(json.dumps(result, indent=2))
+    sys.stdout.write(json.dumps(result, indent=2) + "\n")
     return 0 if result["retrieval_gate_passed"] else 1
 
 

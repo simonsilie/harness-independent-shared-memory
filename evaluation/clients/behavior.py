@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from uuid import uuid4
 
+from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -179,7 +180,7 @@ async def codex(env, out, prompts, outage=False, instructions=None):
                         break
                 turns.append((calls, answers))
                 dump(out, f"{label}-turn-{index}", turns[-1])
-                print(f"{label}: turn {index} complete", flush=True)
+                logger.info(f"{label}: turn {index} complete")
             return turns
         finally:
             stdin.close()
@@ -287,7 +288,7 @@ def opencode(env, out, prompts, outage=False, instructions=None):
                         timeout=180,
                     )
                     (out / f"{label}-connection.json").write_text(connection.stdout)
-                print(f"{label}: turn {index} complete", flush=True)
+                logger.info(f"{label}: turn {index} complete")
             return turns
         finally:
             proc.terminate()
@@ -302,7 +303,7 @@ def main(out=None, prompts=PROMPTS):
     if out is None:
         out = Path(__file__).parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     out.mkdir(mode=0o700, parents=True)
-    print(f"Behavior evidence: {out}", flush=True)
+    logger.info(f"Behavior evidence: {out}")
     for client, run in (
         ("codex", lambda *args, **kwargs: asyncio.run(codex(*args, **kwargs))),
         ("opencode", opencode),
@@ -314,7 +315,7 @@ def main(out=None, prompts=PROMPTS):
         outage = run(env, out, [outage_prompt()], outage=True)
         assert "391" in outage[0][1], outage
         dump(out, client + "-outage-response", outage)
-    print("Inspect proposal and outage responses before accepting the results.", flush=True)
+    logger.info("Inspect proposal and outage responses before accepting the results.")
 
 
 if __name__ == "__main__":

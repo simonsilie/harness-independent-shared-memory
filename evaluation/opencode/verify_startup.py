@@ -5,6 +5,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -81,7 +83,7 @@ result = {
     "client_response": texts[-1],
 }
 (OUT / "startup-result.json").write_text(json.dumps(result, indent=2) + "\n")
-print(
+logger.info(
     f"Startup check verified: {result['searches']} searches, {result['reads']} reads, "
     f"inventory {result['effective_tools']}, corpus unchanged. Wrote startup-result.json."
 )

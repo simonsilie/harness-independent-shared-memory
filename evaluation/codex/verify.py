@@ -4,6 +4,8 @@ import sys
 from collections import defaultdict, deque
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(sys.argv[1]).resolve()
 events = [json.loads(line)["message"] for line in (OUT / "events.jsonl").read_text().splitlines()]
@@ -70,6 +72,6 @@ assert json.loads((OUT / "corpus-before.json").read_text()) == json.loads((OUT /
 (ROOT / "evaluation/results-codex.json").write_text(json.dumps(results, indent=2) + "\n")
 (OUT / "results.json").write_text(json.dumps(results, indent=2) + "\n")
 (OUT / "tool-calls.json").write_text(json.dumps(calls, indent=2) + "\n")
-print(
+logger.info(
     f"Verified 22 actual text searches, {len(calls) - 22} reads, returned ID order, provenance, and unchanged corpus. Wrote results-codex.json."
 )

@@ -4,11 +4,13 @@ import json
 import os
 import statistics
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import CallToolResult, TextContent
@@ -16,7 +18,7 @@ from mcp.types import CallToolResult, TextContent
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
-print(f"Evidence artifacts: {OUT}", flush=True)
+logger.info(f"Evidence artifacts: {OUT}")
 
 source = ROOT / "evaluation/harness-independent-shared-memory.md"
 source_revision = "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
@@ -101,7 +103,7 @@ async def verify() -> list[float]:
                 assert source_path == source.resolve(), (stem, source_path)
                 assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source_revision.removeprefix("sha256:")
                 latencies.append((time.monotonic() - started) * 1000)
-                print(f"Verified {stem}", flush=True)
+                logger.info(f"Verified {stem}")
     return latencies
 
 
@@ -128,4 +130,4 @@ summary = {
     ),
 }
 (OUT / "result.json").write_text(json.dumps(summary, indent=2) + "\n")
-print(json.dumps(summary, indent=2))
+sys.stdout.write(json.dumps(summary, indent=2) + "\n")

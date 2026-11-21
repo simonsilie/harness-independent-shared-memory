@@ -12,13 +12,14 @@ from importlib.metadata import version
 from pathlib import Path
 
 import basic_memory
+from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
-print(f"Native MCP/watcher probe artifacts: {OUT}", flush=True)
+logger.info(f"Native MCP/watcher probe artifacts: {OUT}")
 assert version("basic-memory") == os.environ.get("PHASE1B_EXPECTED_VERSION", "1.0.0")
 installed = "--installed-semantic-disabled" in sys.argv
 semantic_disabled = installed or "--semantic-disabled" in sys.argv
@@ -338,4 +339,4 @@ summary = {
     ),
 }
 (OUT / "result.json").write_text(json.dumps(summary, indent=2) + "\n")
-print(json.dumps(summary, indent=2))
+sys.stdout.write(json.dumps(summary, indent=2) + "\n")

@@ -80,3 +80,7 @@ others.
 - Verify stdio write gates by sending the request through the actual proxy to a
   disposable native store. Bound reply waits and assert the resulting store
   state (see `tests/approval_gate/test_native_integration.py`).
+- In stdio subprocess tests, set a deadline for each expected reply and
+  terminate and reap the child on timeout. A live child can keep stdout open
+  without replying. See the bounded MCP calls in
+  `evaluation/native/mcp_watcher.py`.

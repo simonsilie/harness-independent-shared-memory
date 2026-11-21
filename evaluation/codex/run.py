@@ -6,13 +6,15 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 
 
 async def main():
     (OUT / "workspace").mkdir(parents=True)
-    print(f"Run artifacts: {OUT}", flush=True)
+    logger.info(f"Run artifacts: {OUT}")
     config = tomllib.loads((ROOT / "evaluation/codex/config.toml").read_text())
     if "--outage" in sys.argv:
         config["mcp_servers"]["basic_memory"]["command"] = "/usr/bin/false"
@@ -133,7 +135,7 @@ async def main():
             (OUT / "outage-result.json").write_text(
                 json.dumps({"thread_blocked": True, "error": str(error)}, indent=2) + "\n"
             )
-            print(f"Required service outage blocked thread startup: {error}", flush=True)
+            logger.info(f"Required service outage blocked thread startup: {error}")
             return
         if "--outage" in sys.argv:
             raise RuntimeError("Required MCP outage did not block thread startup; inspect transcript.")
@@ -146,7 +148,7 @@ async def main():
         names = {tool["name"] for server in status["data"] for tool in server["tools"].values()}
         if names != {"bm_search", "bm_read"} or status.get("nextCursor"):
             raise RuntimeError(f"Effective tool allowlist failed: {sorted(names)}")
-        print("Verified effective MCP tools: bm_read, bm_search", flush=True)
+        logger.info("Verified effective MCP tools: bm_read, bm_search")
         if "--verify-only" in sys.argv:
             return
         questions = (ROOT / "evaluation/questions.json").read_text()
@@ -167,7 +169,7 @@ Questions:
             if event.get("method") == "item/completed":
                 item = event["params"]["item"]
                 if item.get("type") == "mcpToolCall":
-                    print(f"{item.get('tool')}: {item.get('status')}", flush=True)
+                    logger.info(f"{item.get('tool')}: {item.get('status')}")
                 if item.get("type") == "agentMessage":
                     (OUT / "client-response.txt").write_text(item["text"])
             if event.get("method") == "turn/completed":
@@ -185,7 +187,7 @@ Questions:
         stderr.close()
         after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT / "evaluation/corpus").glob("*.md")}
         (OUT / "corpus-after.json").write_text(json.dumps(after, indent=2) + "\n")
-        print(f"Corpus bytes unchanged: {before == after}", flush=True)
+        logger.info(f"Corpus bytes unchanged: {before == after}")
         if before != after:
             raise RuntimeError("Corpus changed during evaluation; review the before/after hashes.")
 

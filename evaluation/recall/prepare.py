@@ -3,6 +3,8 @@ import json
 import random
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "harness-independent-shared-memory.md"
 AUTHORED_SOURCE_REVISION = "sha256:49b0153bbf514d31ef42992dca88a37024506a1978f13f0a9c83b329f28953de"
@@ -173,7 +175,7 @@ def main():
     scoring = ROOT / "scoring"
     scoring.mkdir(exist_ok=True)
     (scoring / "answer-key.json").write_text(json.dumps(answer_key, indent=2) + "\n")
-    print("Prepared 20 draft notes and 22 questions; no engine configured.")
+    logger.info("Prepared 20 draft notes and 22 questions; no engine configured.")
 
 
 if __name__ == "__main__":

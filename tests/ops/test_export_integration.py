@@ -260,11 +260,18 @@ def test_export_covers_all_projects_and_is_readable_without_basic_memory(store: 
     }
 
 
-def test_export_cli_writes_bundles_for_every_project(store: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("use_positionals", [True, False])
+def test_export_cli_writes_bundles_for_every_project(store: Path, tmp_path: Path, use_positionals: bool) -> None:
     destination = tmp_path / "cli-export"
+    arguments = [str(store), str(destination)] if use_positionals else []
+    environment = os.environ | {
+        "SHARED_MEMORY_OPS_SOURCE": str(tmp_path / "unused-source" if use_positionals else store),
+        "SHARED_MEMORY_OPS_DESTINATION": str(tmp_path / "unused-destination" if use_positionals else destination),
+    }
     result = subprocess.run(
-        [sys.executable, "-m", "ops", "export", str(store), str(destination)],
+        [sys.executable, "-m", "ops", "export", *arguments],
         cwd=Path(__file__).resolve().parents[2],
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

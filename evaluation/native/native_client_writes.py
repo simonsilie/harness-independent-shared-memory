@@ -11,10 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).parent / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-native-writes")
 OUT.mkdir(parents=True)
-print(f"Native client write artifacts: {OUT}", flush=True)
+logger.info(f"Native client write artifacts: {OUT}")
 state, corpus, workspace = (OUT / name for name in ("state", "corpus", "workspace"))
 for directory in (state, corpus, workspace):
     directory.mkdir()
@@ -256,7 +258,7 @@ def run(client, name, operations):
         assert len(matching) == 1, (name, expected_tool, expected_arguments, calls)
         ordered.append(json.loads(matching[0]))
     dump(f"{name}-calls", calls)
-    print(f"{name}: {len(calls)} verified native tool calls", flush=True)
+    logger.info(f"{name}: {len(calls)} verified native tool calls")
     return ordered
 
 
@@ -344,4 +346,4 @@ dump(
         "model_free_control_only": True,
     },
 )
-print("Both clients preserved newer native revisions after stale writes", flush=True)
+logger.info("Both clients preserved newer native revisions after stale writes")

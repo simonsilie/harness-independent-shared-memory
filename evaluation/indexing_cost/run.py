@@ -8,6 +8,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[1]
 MEASURED_RUNS = [
     # The embedding pass requires indexed entities, so it reuses the same store
@@ -22,7 +24,7 @@ def main(out=None):
     if out is None:
         out = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     out.mkdir(parents=True)
-    print(f"Indexing-cost artifacts: {out}", flush=True)
+    logger.info(f"Indexing-cost artifacts: {out}")
 
     source_revision = (
         "sha256:" + hashlib.sha256((ROOT / "harness-independent-shared-memory.md").read_bytes()).hexdigest()
@@ -102,7 +104,7 @@ def main(out=None):
             "peak_rss_mb": round(usage.ru_maxrss / (1024 * 1024), 1),
             "store_bytes": (state / "memory.db").stat().st_size,
         }
-        print(f"{name}: {results[name]['wall_s']} s, {results[name]['peak_rss_mb']} MB peak RSS", flush=True)
+        logger.info(f"{name}: {results[name]['wall_s']} s, {results[name]['peak_rss_mb']} MB peak RSS")
 
     # Sanity checks, run separately so they do not pollute the measurements.
     search = subprocess.run(
@@ -146,7 +148,7 @@ def main(out=None):
         ),
     }
     (out / "result.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    sys.stdout.write(json.dumps(summary, indent=2) + "\n")
 
 
 if __name__ == "__main__":
