@@ -1,0 +1,275 @@
+[
+  {
+    "question_id": "q-4a2637b4c6501bc1",
+    "query": "local stdio server review separation",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-05",
+      "memory-08",
+      "memory-11",
+      "memory-18",
+      "memory-07"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-11 (Review execution boundary), a local stdio server running as the agent's OS user is insufficient by itself; enforcement requires agents to lack reviewer credentials, unrestricted backend APIs, and shell write access to canonical files."
+  },
+  {
+    "question_id": "q-5cad137ec5541663",
+    "query": "Jenkins version production server",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-11",
+      "memory-18"
+    ],
+    "recognized_missing_evidence": true,
+    "answer": "No evidence found: neither retrieved note (memory-11, memory-18) mentions a Jenkins production server or its version, and no Jenkins version appears in memory. The version cannot be stated from the knowledge base."
+  },
+  {
+    "question_id": "q-8ef4a3faee555888",
+    "query": "text query mode background embeddings",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-19"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-19 (Embedding exception), text queries alone do not disable indexing inference; phase 1A explicitly permits local background embeddings as a documented exception, with no hosted embedding provider configured."
+  },
+  {
+    "question_id": "q-4a07bb1a2b744a23",
+    "query": "project identity renames worktrees",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-07"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Use a stable project UUID mapped to approved repository identities and local checkouts. Per memory-07 (Project identity), a local directory path alone is insufficient; repository renames and multiple worktrees must preserve project identity."
+  },
+  {
+    "question_id": "q-82cdada0c5569879",
+    "query": "shared memory live context window transfer",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-01"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-01 (Shared memory scope), shared memory is durable facts, decisions, lessons, and temporary handovers; it does not transfer a model's live context window or hidden reasoning."
+  },
+  {
+    "question_id": "q-7cb0db5845bf9b68",
+    "query": "SQLite WAL sync laptops",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-20"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-20 (SQLite backup safety), do not sync a live SQLite/WAL database or place it on a shared network filesystem; keep SQLite on a local filesystem and sync completed backups or exported documents instead."
+  },
+  {
+    "question_id": "q-7042c7637db4e3ee",
+    "query": "agent retrieve task start",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-12",
+      "memory-13",
+      "memory-11",
+      "memory-02",
+      "memory-19"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Per memory-12 (Startup retrieval): resolve the project, search accepted decisions and lessons, then separately inspect handovers for the current project/task and compare their branch and commit with the checkout before resuming work. Explicit tool/CLI calls remain the fallback; identical lifecycle hooks across clients are not assumed."
+  },
+  {
+    "question_id": "q-eadef6b91f937cf2",
+    "query": "Markdown database writable authority",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-03",
+      "memory-06",
+      "memory-20"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-03 (Canonical storage), the architecture requires one canonical representation; files and database rows must not be independently writable authorities. A database may index canonical Markdown records, with document writes requiring atomic updates and revision checks."
+  },
+  {
+    "question_id": "q-0b41fdaca5404d9e",
+    "query": "project tag access control",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-04"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-04 (Knowledge visibility), project names, memory-bank identifiers, and search tags alone are not access-control boundaries; scope expresses intended visibility and authorization must enforce it."
+  },
+  {
+    "question_id": "q-d58d7827b9a52676",
+    "query": "default knowledge recall records",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-10",
+      "memory-04",
+      "memory-16",
+      "memory-03",
+      "memory-09"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Per memory-10 (Default recall): only accepted, unexpired, applicable entries in permitted scopes. The explicit handover view separately returns only active, unexpired handovers labeled as unreviewed work \u2014 these are target behaviors, not verified product capabilities."
+  },
+  {
+    "question_id": "q-0b10e6119e7d5603",
+    "query": "recalled build instructions conflict repository documentation",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-06",
+      "memory-02",
+      "memory-07",
+      "memory-20",
+      "memory-14"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Repository documentation wins. Per memory-06 (Repository authority), repository documentation remains authoritative for current build instructions and binding project rules; memory captures explanations and lessons linked to their sources, and conflicts must be surfaced with the current repository state verified."
+  },
+  {
+    "question_id": "q-5d446963854e175d",
+    "query": "accepting record evidence verified",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-08",
+      "memory-10",
+      "memory-09",
+      "memory-03",
+      "memory-07"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-08 (Review and verification), acceptance is distinct from evidence verification: `verified_at` remains null unless the evidence was actually checked, and a model-assigned confidence score is not verification."
+  },
+  {
+    "question_id": "q-cb8098c71f7055d4",
+    "query": "personal employer knowledge separation",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-05"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Per memory-05 (Employer separation): use separate deployments or separate credentials and stores for personal and employer knowledge from the beginning; moving to a team must not automatically publish private entries \u2014 publication must be explicit and reviewed, with a new destination identity and a provenance link."
+  },
+  {
+    "question_id": "q-d9f9ca85d8a49980",
+    "query": "phase 1A deployment limits",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-19",
+      "memory-18",
+      "memory-05",
+      "memory-20",
+      "memory-11"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Per memory-18 (Pilot constraints), phase 1A is limited to one repository, one owner, one writer host, and 20\u201330 owner-reviewed, non-sensitive records with sources and stable IDs; each client's effective tools must permit only read/search (otherwise leave the unrestricted server disabled). Deferred: agent capture, automatic lifecycle filtering, review enforcement, concurrent writes, complete revision-history portability, and multi-user authorization."
+  },
+  {
+    "question_id": "q-51a022dd019e82d3",
+    "query": "duplicate write retries",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-15",
+      "memory-18",
+      "memory-03",
+      "memory-11"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Per memory-15 (Write retries): idempotency keys are scoped to the authenticated caller and operation; a retry must return the original result, reuse of a key with a different payload must fail, and retrying acceptance of an already accepted proposal must return its original resulting revision."
+  },
+  {
+    "question_id": "q-d99e48f5c634e73f",
+    "query": "employer memory service API credential",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-01",
+      "memory-05",
+      "memory-11",
+      "memory-02",
+      "memory-06"
+    ],
+    "recognized_missing_evidence": true,
+    "answer": "No evidence found: no retrieved note contains an employer memory service API credential value. Memory-05 only requires that personal and employer knowledge use separate credentials and stores; the actual credential is not recorded in the knowledge base."
+  },
+  {
+    "question_id": "q-56233c396ceb977a",
+    "query": "handover default duration expiry",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-16",
+      "memory-10",
+      "memory-17",
+      "memory-04",
+      "memory-13"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Seven days. Per memory-16 (Handover expiry), handovers are personal by default, may be explicitly shared with an authorized project, and expire after seven days by default."
+  },
+  {
+    "question_id": "q-0e465b6cddc10a27",
+    "query": "expiry cleanup job",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-17"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-17 (Read time expiry), `expires_at` must be checked at read time, including cached and indexed results; expiry must not depend on a cleanup job or destroy history."
+  },
+  {
+    "question_id": "q-2285752826a85da1",
+    "query": "edit submitted proposal immutable",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-09",
+      "memory-14",
+      "memory-02",
+      "memory-13",
+      "memory-15"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Per memory-09 (Proposal immutability), submitted candidate content and metadata are immutable; corrections require a new proposal, though the proposal can still be accepted or rejected with the review outcome recorded."
+  },
+  {
+    "question_id": "q-2806da992d02308e",
+    "query": "first experiment evaluate engine",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-02",
+      "memory-16",
+      "memory-19",
+      "memory-11"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Basic Memory. Per memory-02 (Evaluate before building), the first experiment should evaluate Basic Memory in a read-only, personal recall experiment with a curated corpus before implementing a custom memory engine."
+  },
+  {
+    "question_id": "q-2b65de2a2d82c40e",
+    "query": "proposals same base revision accepted sequence",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-14",
+      "memory-09",
+      "memory-15",
+      "memory-18",
+      "memory-03"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "The second acceptance hits a conflict. Per memory-14 (Stale proposal approval), acceptance compares the proposal's original stored `base_revision` (4) against the current durable revision, which the first acceptance advanced; the mismatch must return a conflict and leave the proposal pending, and a new proposal against the current revision must be created rather than changing the old proposal's base."
+  },
+  {
+    "question_id": "q-bc48ea8846c3bfbe",
+    "query": "initial recall snippet budget tokens",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-13",
+      "memory-10",
+      "memory-19",
+      "memory-02",
+      "memory-17"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Roughly 2,000 tokens. Per memory-13 (Search budget), the initial combined knowledge and handover snippet budget is ~2,000 tokens, and whether it is sufficient should be measured."
+  }
+]

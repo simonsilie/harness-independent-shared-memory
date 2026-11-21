@@ -1,0 +1,48 @@
+[project]
+name = "harness-independent-shared-memory"
+version = "0.1.0"
+description = "Read-only recall evaluation of Basic Memory as shared memory."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "basic-memory==1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "pyrefly>=0.45",
+    "pytest>=9.2.0",
+]
+
+[tool.uv]
+prerelease = "allow"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--import-mode=importlib"
+markers = [
+    "integration: tests that exercise real filesystem, process or service boundaries",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = [
+    ".venv",
+    "evaluation/*/runs",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "PTH"]
+
+[tool.pyrefly]
+project-includes = ["**/*.py"]
+project-excludes = [
+    "**/runs/**",
+    ".venv/**",
+    ".python/**",
+    ".uv-cache/**",
+]

@@ -1,0 +1,239 @@
+[
+  {
+    "question_id": "q-4a2637b4c6501bc1",
+    "query": "stdio review separation",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-05",
+      "memory-08",
+      "memory-11",
+      "memory-18",
+      "memory-09"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Under the proposal (memory-11), a local stdio server running as the agent's OS user is not enough by itself. Agents must also lack reviewer credentials, unrestricted backend APIs and shell write access to canonical files. This is a proposed requirement, not a tested capability."
+  },
+  {
+    "question_id": "q-5cad137ec5541663",
+    "query": "Jenkins version",
+    "mode": "text",
+    "retrieved_ids": [],
+    "recognized_missing_evidence": true,
+    "answer": "Missing evidence: no note says which Jenkins version the production server runs."
+  },
+  {
+    "question_id": "q-8ef4a3faee555888",
+    "query": "text mode embeddings",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-19"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Text queries alone do not turn off indexing inference. Phase 1A allows local background embeddings as a documented exception, with no hosted embedding provider (memory-19)."
+  },
+  {
+    "question_id": "q-4a07bb1a2b744a23",
+    "query": "project identity renames worktrees",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-07"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Use a project UUID that maps to approved repository identities and local checkouts. A local directory path alone is not enough. Renames and multiple worktrees must keep the same identity (proposed, memory-07)."
+  },
+  {
+    "question_id": "q-82cdada0c5569879",
+    "query": "context window",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-01"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Shared memory holds durable facts, decisions, lessons and temporary handovers. It does not transfer a model's live context window or hidden reasoning (memory-01)."
+  },
+  {
+    "question_id": "q-7cb0db5845bf9b68",
+    "query": "SQLite WAL sync",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-20"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Do not sync a live SQLite/WAL database or put it on a shared network filesystem. Sync completed consistent backups or exported documents instead, and handle conflicts (memory-20)."
+  },
+  {
+    "question_id": "q-7042c7637db4e3ee",
+    "query": "task start retrieve",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-12",
+      "memory-13",
+      "memory-19"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Resolve the project and search accepted decisions and lessons. Separately, check handovers for the current project or task and compare their branch and commit with the checkout before resuming. Explicit tool or CLI calls are the fallback (proposed, memory-12)."
+  },
+  {
+    "question_id": "q-eadef6b91f937cf2",
+    "query": "Markdown database authority",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-03",
+      "memory-06",
+      "memory-20"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. There must be one canonical representation, and files and database rows must not be independently writable. A database may index the canonical Markdown records (memory-03)."
+  },
+  {
+    "question_id": "q-0b41fdaca5404d9e",
+    "query": "project tag access control",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-04"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Project names, memory-bank identifiers and search tags alone are not access-control boundaries. Authorization must enforce scope (memory-04)."
+  },
+  {
+    "question_id": "q-d58d7827b9a52676",
+    "query": "default recall",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-10"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Only accepted, unexpired, applicable entries in permitted scopes. This is a target behavior, not a verified capability (memory-10)."
+  },
+  {
+    "question_id": "q-0b10e6119e7d5603",
+    "query": "build instructions repository documentation",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-06"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Repository documentation wins for current build instructions and binding rules. Surface the conflict and check the current repository state (memory-06)."
+  },
+  {
+    "question_id": "q-5d446963854e175d",
+    "query": "acceptance evidence verified",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-08"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Acceptance is separate from evidence verification. verified_at stays null unless the evidence was actually checked, and a model confidence score is not verification (memory-08)."
+  },
+  {
+    "question_id": "q-cb8098c71f7055d4",
+    "query": "personal employer knowledge",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-05"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Use separate deployments, or separate credentials and stores, from the start. Nothing is published automatically. Publication is explicit and reviewed, with a new destination identity and a provenance link (memory-05)."
+  },
+  {
+    "question_id": "q-d9f9ca85d8a49980",
+    "query": "phase 1A",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-19",
+      "memory-18"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "One repository, one owner, one writer host, and 20\u201330 owner-reviewed, non-sensitive records with sources and stable IDs. Only accepted, applicable entries are indexed, and clients get read/search tools only. Agent capture, automatic lifecycle filtering, review enforcement, concurrent writes, full revision-history portability and multi-user authorization are deferred (memory-18). Local background embeddings are allowed as an exception that ends at 1A (memory-19)."
+  },
+  {
+    "question_id": "q-51a022dd019e82d3",
+    "query": "duplicate retries",
+    "mode": "text",
+    "retrieved_ids": [],
+    "recognized_missing_evidence": false,
+    "answer": "This query returned no hits, but memory-15 ('Write retries') appeared in the results for q-2285752826a85da1 and q-2b65de2a2d82c40e. Under the proposal, idempotency keys are scoped to the authenticated caller and operation. A retry returns the original result, and reusing a key with a different payload fails. Retrying acceptance of an already accepted proposal returns its original resulting revision."
+  },
+  {
+    "question_id": "q-d99e48f5c634e73f",
+    "query": "API credential",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-11"
+    ],
+    "recognized_missing_evidence": true,
+    "answer": "Missing evidence: no note records an employer memory service API credential. memory-11 only says agents must not hold reviewer credentials."
+  },
+  {
+    "question_id": "q-56233c396ceb977a",
+    "query": "handover default",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-10",
+      "memory-16"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Seven days by default (proposed, memory-16)."
+  },
+  {
+    "question_id": "q-0e465b6cddc10a27",
+    "query": "expiry cleanup job",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-17"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. expires_at must be checked at read time, including in cached and indexed results. Expiry must not depend on a cleanup job or destroy history (memory-17)."
+  },
+  {
+    "question_id": "q-2285752826a85da1",
+    "query": "submitted proposal edit",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-09",
+      "memory-14",
+      "memory-02",
+      "memory-13",
+      "memory-15"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "No. Submitted content and metadata cannot be changed, so a correction needs a new proposal (memory-09). A stale proposal's base also must not be changed (memory-14)."
+  },
+  {
+    "question_id": "q-2806da992d02308e",
+    "query": "first experiment engine",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-02",
+      "memory-16",
+      "memory-19",
+      "memory-11"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Basic Memory, in a read-only personal recall experiment with a curated corpus, before building a custom engine (memory-02)."
+  },
+  {
+    "question_id": "q-2b65de2a2d82c40e",
+    "query": "proposals revision accepted",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-09",
+      "memory-15",
+      "memory-18",
+      "memory-14",
+      "memory-03"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "Assuming revision four is current, the first acceptance succeeds and creates a new revision. The second proposal's stored base_revision (4) then no longer matches, so it returns a conflict and stays pending. It needs a new proposal against the current revision (proposed, memory-14)."
+  },
+  {
+    "question_id": "q-bc48ea8846c3bfbe",
+    "query": "snippet budget",
+    "mode": "text",
+    "retrieved_ids": [
+      "memory-13"
+    ],
+    "recognized_missing_evidence": false,
+    "answer": "About 2,000 tokens for knowledge and handover snippets combined, still to be measured for sufficiency (memory-13)."
+  }
+]

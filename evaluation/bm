@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+evaluation_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+project_dir=$(dirname -- "$evaluation_dir")
+export BASIC_MEMORY_CONFIG_DIR="$evaluation_dir/.state"
+export BASIC_MEMORY_HOME="$evaluation_dir/corpus"
+export BASIC_MEMORY_FORCE_LOCAL=true
+export BASIC_MEMORY_AUTO_UPDATE=false
+export BASIC_MEMORY_DEFAULT_SEARCH_TYPE=text
+export BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER=fastembed
+export BASIC_MEMORY_SEMANTIC_EMBEDDING_CACHE_DIR="$project_dir/.models"
+export BASIC_MEMORY_LOGFIRE_ENABLED=false
+export FASTEMBED_CACHE_PATH="$project_dir/.models"
+export HF_HOME="$project_dir/.models/huggingface"
+export XDG_CACHE_HOME="$evaluation_dir/.cache"
+export UV_CACHE_DIR="$project_dir/.uv-cache"
+export UV_PYTHON_INSTALL_DIR="$project_dir/.python"
+exec uv run --project "$project_dir" --locked --no-sync basic-memory "$@"

@@ -1,0 +1,7 @@
+# Evaluate memory through productive use on real projects
+
+Use shared memory productively on existing projects and evaluate its usefulness alongside that work, rather than requiring artificial pilot projects or completion of an all-client everyday-use gate before adoption. Codex and OpenCode are the initial everyday-use clients; daily use of Claude Code is not an acceptance requirement.
+
+Organize current work through a capability-based [roadmap](../ROADMAP.md), replacing the former stage-based planning with capability-based planning. Preserve historical reports, test directories and evidence references, but label them neutrally rather than by their former phase names; they are historical evidence and impose no current rollout gates. Pinned source hashes, recorded tool arguments and raw run paths keep their original identifiers.
+
+Evaluate whether sessions resume effectively from handovers, durable findings are reused, and personal preferences such as Python programming guidelines carry across projects without duplicating the same instructions in every repository. These preferences serve as shared defaults while current project-specific rules retain precedence. The [first review](../observation-review.md#review-performed-21-november-2026) took place on 21 November 2026. Continue reviewing actual successes, missed recall, and required reminders as evidence from real work accumulates. Check backup, restoration, and export separately through targeted verification.

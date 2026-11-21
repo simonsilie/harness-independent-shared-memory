@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": ["mcp__basic_memory__bm_search", "mcp__basic_memory__bm_read"],
+    "deny": [
+      "mcp__basic_memory__bm_context",
+      "mcp__basic_memory__bm_delete",
+      "mcp__basic_memory__bm_edit",
+      "mcp__basic_memory__bm_find",
+      "mcp__basic_memory__bm_list",
+      "mcp__basic_memory__bm_man",
+      "mcp__basic_memory__bm_move",
+      "mcp__basic_memory__bm_project",
+      "mcp__basic_memory__bm_schema",
+      "mcp__basic_memory__bm_write"
+    ]
+  }
+}

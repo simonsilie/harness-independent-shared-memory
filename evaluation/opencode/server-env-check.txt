@@ -1,0 +1,33 @@
+Server environment checks, 14 November 2026 (local time UTC+1)
+
+Finding: the `bm` launcher does not set HF_HUB_OFFLINE. That variable came from
+Codex's project-local `[mcp_servers.basic_memory.env]`. The OpenCode MCP server
+configuration originally omitted it.
+
+Observed process environments (`ps eww`, OpenCode service pid 74564):
+
+- PID 75747, started 12:09:45, command `.venv-py314/bin/basic-memory mcp
+  --project main`: BASIC_MEMORY_* and FASTEMBED_CACHE_PATH set, no
+  HF_HUB_OFFLINE. This server performed background indexing and FastEmbed
+  downloaded BAAI/bge-small-en-v1.5 (Qdrant ONNX) into .models:
+  blob aaca296ced1def8c4e3df6cb215f78017b69427da86a9b725e77e8f68665ca8d,
+  66,465,124 bytes, downloaded 12:05 via the Hugging Face xet path
+  (.models/huggingface/xet/logs/xet_20261114T120454963+0100_75206.log).
+  The scored run's startup log then showed 20 embeddings across 20 chunks.
+- PID 76513, spawned after the configuration fix: HF_HUB_OFFLINE=1 present.
+
+Controlled cold-cache experiment (disposable state and cache under
+<temporary-directory>/opencode/bm-offline-test,
+same env as the launcher plus HF_HUB_OFFLINE=1, stdin held open for 200 s):
+FastEmbed never downloaded; it failed with
+`Could not find the model tar.gz file at .../cache/bge-small-en-v1.5 and
+local_files_only=True` (`fastembed.common.model_management`), matching the
+recorded Codex behaviour. The cache stayed 0 B.
+
+Conclusion: HF_HUB_OFFLINE=1 is effective for FastEmbed when it is actually in
+the server environment; the 66 MB download happened only because the OpenCode
+configuration lacked it. The environment entry is now in
+.opencode/opencode.json (and the tracked template). The weights remain in the
+project-local .models cache; they predate the scored run and do not affect its
+explicit mode="text" searches. Indexing wall time and memory use were not
+measured.

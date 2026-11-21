@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "basic_memory": {
+      "type": "stdio",
+      "command": "/absolute/path/to/harness-independent-shared-memory/evaluation/bm",
+      "args": ["mcp", "--project", "main"],
+      "env": {
+        "HF_HUB_OFFLINE": "1"
+      }
+    }
+  }
+}

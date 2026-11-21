@@ -1,0 +1,11 @@
+[mcp_servers.basic_memory]
+command = "/absolute/path/to/harness-independent-shared-memory/evaluation/bm"
+args = ["mcp", "--project", "main"]
+enabled_tools = ["bm_search", "bm_read"]
+required = true
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+default_tools_approval_mode = "approve"
+
+[mcp_servers.basic_memory.env]
+HF_HUB_OFFLINE = "1"

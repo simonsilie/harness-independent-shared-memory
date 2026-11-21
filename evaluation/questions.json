@@ -1,0 +1,90 @@
+[
+  {
+    "id": "q-4a2637b4c6501bc1",
+    "question": "Does a local stdio server alone enforce review separation?"
+  },
+  {
+    "id": "q-5cad137ec5541663",
+    "question": "Which Jenkins version does our production server run?"
+  },
+  {
+    "id": "q-8ef4a3faee555888",
+    "question": "Does text query mode prevent background embeddings?"
+  },
+  {
+    "id": "q-4a07bb1a2b744a23",
+    "question": "How should project identity survive renames and worktrees?"
+  },
+  {
+    "id": "q-82cdada0c5569879",
+    "question": "Does shared memory transfer the live context window?"
+  },
+  {
+    "id": "q-7cb0db5845bf9b68",
+    "question": "Can a live SQLite WAL database be synced between laptops?"
+  },
+  {
+    "id": "q-7042c7637db4e3ee",
+    "question": "What should an agent retrieve at task start?"
+  },
+  {
+    "id": "q-eadef6b91f937cf2",
+    "question": "Can both Markdown and database rows be writable authorities?"
+  },
+  {
+    "id": "q-0b41fdaca5404d9e",
+    "question": "Does a project tag enforce access control?"
+  },
+  {
+    "id": "q-d58d7827b9a52676",
+    "question": "Which records belong in default knowledge recall?"
+  },
+  {
+    "id": "q-0b10e6119e7d5603",
+    "question": "What wins when recalled build instructions conflict with repository documentation?"
+  },
+  {
+    "id": "q-5d446963854e175d",
+    "question": "Does accepting a record mean its evidence was verified?"
+  },
+  {
+    "id": "q-cb8098c71f7055d4",
+    "question": "How should personal and employer knowledge be separated?"
+  },
+  {
+    "id": "q-d9f9ca85d8a49980",
+    "question": "What are the phase 1A deployment limits?"
+  },
+  {
+    "id": "q-51a022dd019e82d3",
+    "question": "How are duplicate write retries handled?"
+  },
+  {
+    "id": "q-d99e48f5c634e73f",
+    "question": "What is the employer memory service API credential?"
+  },
+  {
+    "id": "q-56233c396ceb977a",
+    "question": "How long does a handover last by default?"
+  },
+  {
+    "id": "q-0e465b6cddc10a27",
+    "question": "Can expiry wait for a cleanup job?"
+  },
+  {
+    "id": "q-2285752826a85da1",
+    "question": "Can an agent edit a submitted proposal in place?"
+  },
+  {
+    "id": "q-2806da992d02308e",
+    "question": "Which engine should the first experiment evaluate?"
+  },
+  {
+    "id": "q-2b65de2a2d82c40e",
+    "question": "What happens when two proposals based on revision four are accepted in sequence?"
+  },
+  {
+    "id": "q-bc48ea8846c3bfbe",
+    "question": "What is the initial recall snippet budget?"
+  }
+]
