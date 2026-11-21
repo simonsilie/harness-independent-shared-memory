@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import base64
 import hashlib
 import json
@@ -15,6 +14,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import configargparse
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = ROOT / "patches" / "basic-memory-semantic-disable.patch"
@@ -193,18 +194,23 @@ def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = configargparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     build_command = commands.add_parser("build", help="build the patched wheel from the uv lock pin")
-    build_command.add_argument("--out", type=Path, default=DIST)
-    build_command.add_argument("--wheel", type=Path, help="local copy of the pinned wheel; still hash-checked")
+    build_command.add_argument("--out", type=Path, default=DIST, env_var="SHARED_MEMORY_RUNTIME_OUT")
+    build_command.add_argument(
+        "--wheel",
+        type=Path,
+        env_var="SHARED_MEMORY_RUNTIME_WHEEL",
+        help="local copy of the pinned wheel; still hash-checked",
+    )
     verify_command = commands.add_parser("verify", help="check the built wheel in a fresh environment")
-    verify_command.add_argument("--out", type=Path, default=DIST)
+    verify_command.add_argument("--out", type=Path, default=DIST, env_var="SHARED_MEMORY_RUNTIME_OUT")
     args = parser.parse_args(argv)
 
     if args.command == "build":
         _, manifest = build(args.out, args.wheel)
-        print(json.dumps(manifest, indent=2, sort_keys=True))
+        sys.stdout.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         return 0
 
     manifest = json.loads((args.out / "manifest.json").read_text())

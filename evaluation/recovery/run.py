@@ -7,10 +7,12 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
-print(f"Recovery artifacts: {OUT}", flush=True)
+logger.info(f"Recovery artifacts: {OUT}")
 documents = [ROOT / "harness-independent-shared-memory.md", *sorted((ROOT / "corpus").glob("*.md"))]
 before = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in documents}
 assert len(documents) == 21
@@ -75,7 +77,7 @@ for path in sorted((restored / "corpus").glob("*.md")):
     note = json.loads(run(path.stem, "tool", "read", path.stem, "--project", "main", "--json"))
     assert note["frontmatter"] == metadata, path.name
     assert (path.parent / metadata["source_uri"]).resolve() == restored / "harness-independent-shared-memory.md"
-    print(f"Restored and read {path.stem}", flush=True)
+    logger.info(f"Restored and read {path.stem}")
 search = json.loads(
     run(
         "search",
@@ -104,4 +106,4 @@ summary = {
     "scope": "Document and metadata restore into an isolated SQLite store; live database was not copied or replaced.",
 }
 (OUT / "result.json").write_text(json.dumps(summary, indent=2) + "\n")
-print(json.dumps(summary, indent=2))
+sys.stdout.write(json.dumps(summary, indent=2) + "\n")

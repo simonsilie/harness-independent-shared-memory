@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 ALLOWED_TOOLS = {"mcp__basic_memory__bm_search", "mcp__basic_memory__bm_read"}
@@ -53,7 +55,7 @@ def require_allowed_tools(init, connected):
 def main():
     workspace = OUT / "workspace"
     workspace.mkdir(parents=True)
-    print(f"Run artifacts: {OUT}", flush=True)
+    logger.info(f"Run artifacts: {OUT}")
     mcp = json.loads((ROOT / "evaluation/claude/mcp.json").read_text())
     if "--outage" in sys.argv:
         mcp["mcpServers"]["basic_memory"] |= {"command": "/usr/bin/false", "args": []}
@@ -129,12 +131,12 @@ def main():
         if "--outage" in sys.argv:
             outcome = {"connected": connected, "mcp_servers": init["mcp_servers"], "tools": init["tools"]}
             (OUT / "outage-result.json").write_text(json.dumps(outcome, indent=2) + "\n")
-            print(f"Outage: server status {init['mcp_servers']}, tools {init['tools']}", flush=True)
+            logger.info(f"Outage: server status {init['mcp_servers']}, tools {init['tools']}")
             if connected or init["tools"]:
                 raise SystemExit("Substituted outage command unexpectedly connected or exposed tools.")
             return
         require_allowed_tools(init, connected)
-        print("Verified live inventory before evaluation: bm_read, bm_search", flush=True)
+        logger.info("Verified live inventory before evaluation: bm_read, bm_search")
         if "--verify-only" in sys.argv:
             return
         if "--startup" in sys.argv:
@@ -163,7 +165,7 @@ def main():
     finally:
         after = corpus_hashes()
         (OUT / "corpus-after.json").write_text(json.dumps(after, indent=2) + "\n")
-        print(f"Corpus bytes unchanged: {before == after}", flush=True)
+        logger.info(f"Corpus bytes unchanged: {before == after}")
         if before != after:
             raise SystemExit("Corpus changed during evaluation; review the before/after hashes.")
 

@@ -28,6 +28,11 @@ uv pip install --python .venv/bin/python --no-deps \
   build/dist/basic_memory-1.0.0+semantic.2-py3-none-any.whl
 ```
 
+Run a command with `--help` to see its environment variables. For example,
+`SHARED_MEMORY_RUNTIME_OUT=build/dist .venv/bin/python build/semantic_runtime.py build`
+sets the output directory. Command-line arguments take precedence.
+`LOGURU_LEVEL` controls which status messages appear on stderr.
+
 Run the setup script from the repository root to create a private
 `~/SharedMemory` with separate directories for personal defaults and an example
 project. The script stops if the store already exists.

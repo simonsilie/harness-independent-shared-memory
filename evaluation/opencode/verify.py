@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -141,7 +143,7 @@ summary = {
     "served_source_revisions_verified": bool(returned_ids) and returned_ids <= read_ids,
 }
 (OUT / "verification-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-print(
+logger.info(
     f"Verified {len(latencies)} actual text-mode searches, {len(calls) - len(latencies)} reads, "
     f"effective inventory {sorted(inventory)}, returned ID order, local corpus provenance, and unchanged corpus. "
     f"Served source revisions verified: {summary['served_source_revisions_verified']}. "

@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import yaml
+from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
 if __name__ == "__main__":
@@ -132,7 +133,7 @@ async def main(out=None, clients=None):
         out = Path(__file__).parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     out.mkdir(mode=0o700, parents=True)
     now = datetime.now(timezone.utc)
-    print(f"Lifecycle evidence: {out}", flush=True)
+    logger.info(f"Lifecycle evidence: {out}")
     before = snapshot(ROOT / "evaluation/corpus") | snapshot(Path.home() / "SharedMemory/notes")
     if clients is None:
         clients = ["codex", "opencode"]
@@ -199,7 +200,7 @@ async def main(out=None, clients=None):
                 "retained_notes": 7,
             },
         )
-        print(f"{client}: lifecycle verified", flush=True)
+        logger.info(f"{client}: lifecycle verified")
     assert before == snapshot(ROOT / "evaluation/corpus") | snapshot(Path.home() / "SharedMemory/notes")
     b.dump(
         out,

@@ -74,3 +74,7 @@ others.
   files through the same descriptor. Create the destination directory before
   copying entries so empty directories are preserved (see `ops/recovery.py`
   and `tests/ops/test_recovery_integration.py`).
+- In stdio subprocess tests, set a deadline for each expected reply and
+  terminate and reap the child on timeout. A live child can keep stdout open
+  without replying. See the bounded MCP calls in
+  `evaluation/native/mcp_watcher.py`.

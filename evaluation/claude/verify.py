@@ -5,6 +5,8 @@ import sys
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(sys.argv[1]).resolve()
 STARTUP = "--startup" in sys.argv[2:]
@@ -95,7 +97,7 @@ if STARTUP:
         "client_response": final["result"],
     }
     (OUT / "startup-result.json").write_text(json.dumps(outcome, indent=2) + "\n")
-    print(f"Startup check verified: {dict(executed)}, memory-20 retrieved and read, corpus unchanged.")
+    logger.info(f"Startup check verified: {dict(executed)}, memory-20 retrieved and read, corpus unchanged.")
     raise SystemExit
 
 # The recorded run prefixed the requested array with one line of prose; accept exactly one fenced block.
@@ -111,7 +113,7 @@ for result in declared:
 assert not any(searches.values()), "Unmatched recorded searches"
 (ROOT / "evaluation/results-claude.json").write_text(json.dumps(declared, indent=2) + "\n")
 (OUT / "results.json").write_text(json.dumps(declared, indent=2) + "\n")
-print(
+logger.info(
     f"Verified {executed['bm_search']} actual text searches, {executed['bm_read']} reads, returned ID order, "
     f"provenance, and unchanged corpus. Wrote results-claude.json."
 )

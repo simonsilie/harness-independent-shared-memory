@@ -11,6 +11,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 from uuid import uuid4
 
+from loguru import logger
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -47,7 +49,7 @@ OUTAGE_INSTRUCTIONS = (
 
 def outage():
     OUT.mkdir(parents=True)
-    print(f"Run artifacts: {OUT}", flush=True)
+    logger.info(f"Run artifacts: {OUT}")
     # Outage configuration injected through OPENCODE_CONFIG_CONTENT: the
     # substituted command fails immediately and the outage plugin records what
     # the model receives. The live configuration and store are not replaced.
@@ -167,7 +169,7 @@ def outage():
     finally:
         after = corpus_hashes()
         (OUT / "corpus-after.json").write_text(json.dumps(after, indent=2) + "\n")
-        print(f"Corpus bytes unchanged: {before == after}", flush=True)
+        logger.info(f"Corpus bytes unchanged: {before == after}")
         if before != after:
             raise SystemExit("Corpus changed during evaluation; review the before/after hashes.")
 
@@ -219,10 +221,9 @@ def outage():
     assert not tools_sent, f"Tools reached the model during the outage: {outcome}"
     assert not executions, f"Tools executed during the outage: {outcome}"
     (OUT / "outage-result.json").write_text(json.dumps(outcome, indent=2) + "\n")
-    print(
+    logger.info(
         f"Outage recorded: basic_memory status {statuses}, {outcome['model_requests']} model requests "
         f"with no tools, {outcome['tool_executions']} tool executions.",
-        flush=True,
     )
 
 
@@ -231,7 +232,7 @@ def main():
         outage()
         return
     OUT.mkdir(parents=True)
-    print(f"Run artifacts: {OUT}", flush=True)
+    logger.info(f"Run artifacts: {OUT}")
     config = json.loads((ROOT / "evaluation/opencode/opencode.json").read_text())
     config.setdefault("plugins", []).append({"package": str(ROOT / "evaluation/opencode/eval-capture")})
     config_json = json.dumps(config, indent=2)
@@ -336,7 +337,7 @@ def main():
                     raise ValueError("Plugin did not confirm the preflight; evaluation stopped")
                 snapshot = verify_inventory(events)
                 (OUT / "effective-tools.json").write_text(json.dumps(snapshot, indent=2) + "\n")
-                print("Verified live inventory before evaluation: bm_search, bm_read", flush=True)
+                logger.info("Verified live inventory before evaluation: bm_search, bm_read")
             finally:
                 marker.unlink(missing_ok=True)
             if "--verify-only" in sys.argv:
@@ -389,7 +390,7 @@ def main():
                 server.wait()
             after = corpus_hashes()
             (OUT / "corpus-after.json").write_text(json.dumps(after, indent=2) + "\n")
-            print(f"Corpus bytes unchanged: {before == after}", flush=True)
+            logger.info(f"Corpus bytes unchanged: {before == after}")
             if before != after:
                 raise SystemExit("Corpus changed during evaluation; review the before/after hashes.")
 
