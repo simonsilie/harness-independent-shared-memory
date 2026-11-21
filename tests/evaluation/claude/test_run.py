@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -24,8 +25,8 @@ def load_runner(tmp_path):
     (root / "evaluation/claude/mcp.json").write_text('{"mcpServers": {"basic_memory": {}}}')
     (root / "evaluation/claude/settings.json").write_text('{"permissions": {"allow": [], "deny": []}}')
     (root / "evaluation/questions.json").write_text("[]")
-    runner.ROOT = root
-    runner.OUT = root / "evaluation/claude/runs/check"
+    setattr(runner, "ROOT", root)
+    setattr(runner, "OUT", root / "evaluation/claude/runs/check")
     return runner
 
 
@@ -55,7 +56,7 @@ def run_cli(runner, argv, preflight_tools=None, run_tools=None):
         settings = Path(command[command.index("--settings") + 1])
         preflight = settings.name == "preflight-settings.json"
         invocations.append({"preflight": preflight, "prompt": command[-1], "settings": settings})
-        events = [init_event(tools=preflight_tools if preflight else run_tools)]
+        events: list[dict[str, Any]] = [init_event(tools=preflight_tools if preflight else run_tools)]
         if not preflight:
             events.append(result_event())
         kwargs["stdout"].write("\n".join(json.dumps(event) for event in events) + "\n")
