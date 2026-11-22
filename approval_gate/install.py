@@ -124,8 +124,9 @@ def main() -> int:
             str(python),
             "-c",
             "from approval_gate.config import load_config; from pathlib import Path; "
-            "import shutil, sys; native = load_config(Path(sys.argv[1])).native_command[0]; "
-            "sys.exit(None if shutil.which(native) else f'Native launcher is not executable: {native}')",
+            "import shutil, sys; config = load_config(Path(sys.argv[1])); native = config.native_command[0]; "
+            "sys.exit(None if shutil.which(native, path=(config.env or {}).get('PATH')) "
+            "else f'Native launcher is not executable: {native}')",
             str(config),
         ]
         install = [uv, "pip", "install", "--python", str(python), "--no-deps"]
@@ -136,7 +137,7 @@ def main() -> int:
             if path == config or path in changes:
                 raise ValueError(f"{path}: expected a distinct client configuration")
             original, updated, launcher = plan_switch(path, old, new)
-            changes[path] = original, updated
+            changes[path] = original.encode(), updated.encode()
             if launcher not in launchers:
                 launchers.append(launcher)
             if args.dry_run and original != updated:
@@ -186,25 +187,43 @@ def main() -> int:
             if args.dry_run:
                 run([*install, *packages_to_install])
                 return 0
-            staged = {}
+            staged: dict[Path, tuple[Path, Path]] = {}
             for path, (original, updated) in changes.items():
                 if original != updated:
-                    with NamedTemporaryFile(dir=path.parent, delete=False) as stream:
-                        temporary = Path(stream.name)
-                        cleanup.callback(temporary.unlink, missing_ok=True)
-                        stream.write(updated.encode())
-                    temporary.chmod(S_IMODE(path.stat().st_mode))
-                    staged[path] = temporary
+                    mode = S_IMODE(path.stat().st_mode)
+                    files = []
+                    for content in (original, updated):
+                        with NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+                            temporary = Path(stream.name)
+                            cleanup.callback(temporary.unlink, missing_ok=True)
+                            stream.write(content)
+                        temporary.chmod(mode)
+                        files.append(temporary)
+                    backup, replacement = files
+                    staged[path] = backup, replacement
             for path, (original, _) in changes.items():
-                if path.read_bytes().decode() != original:
+                if path.read_bytes() != original:
                     raise ValueError(f"{path}: configuration changed during installation")
             run([*install, *packages_to_install])
-            for path, (original, _) in changes.items():
-                if path.read_bytes().decode() != original:
-                    raise ValueError(f"{path}: configuration changed during installation")
+            switched = []
+            try:
+                for path, (original, _) in changes.items():
+                    if path.read_bytes() != original:
+                        raise ValueError(f"{path}: configuration changed during installation")
+                    if path in staged:
+                        staged[path][1].replace(path)
+                        switched.append(path)
+            except (OSError, ValueError, KeyboardInterrupt):
+                for path in reversed(switched):
+                    try:
+                        if path.read_bytes() != changes[path][1]:
+                            raise ValueError("configuration changed after the launcher was switched")
+                        staged[path][0].replace(path)
+                    except (OSError, ValueError) as error:
+                        print(f"Could not restore {path}: {error}", file=sys.stderr)
+                raise
             for path in changes:
                 if path in staged:
-                    staged[path].replace(path)
                     print(f"Switched launcher in {path}")
                 else:
                     print(f"Launcher already configured in {path}")

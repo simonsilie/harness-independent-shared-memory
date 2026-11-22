@@ -100,11 +100,51 @@ def proxy(gate_config):
     "launcher", json.loads(os.environ.get("SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS", "[]")) or [None]
 )
 def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launcher):
-    _, config, config_path = gate_config
-    expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG", str(tmp_path / "launcher-config.json"))
+    root, config, config_path = gate_config
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "SharedMemory").symlink_to(root, target_is_directory=True)
+    projects = home / "Projects"
+    projects.mkdir()
+    checkout = Path(__file__).resolve().parents[2]
+    (projects / "harness-independent-shared-memory").symlink_to(checkout, target_is_directory=True)
+    test_env = {
+        **(config.env or {}),
+        "HOME": str(home),
+        "BASIC_MEMORY_CLOUD_MODE": "false",
+        "BASIC_MEMORY_FORCE_CLOUD": "false",
+        "BASIC_MEMORY_DATABASE_BACKEND": "sqlite",
+        "BASIC_MEMORY_DATABASE_URL": "",
+        "BASIC_MEMORY_PROJECT_ROOT": "",
+        "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
+    }
+    config_path.write_text(config.model_copy(update={"env": test_env}).model_dump_json())
+    selected_path = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
+    expected = selected_path or str(tmp_path / "launcher-config.json")
     if launcher is None:
         wrapper = tmp_path / "launcher"
-        checkout = Path(__file__).resolve().parents[2]
+        if selected_path is None:
+            native = tmp_path / "native"
+            native.write_text(
+                "#!/bin/sh\nset -eu\n"
+                'test "$APPROVAL_GATE_NATIVE_MODE" = local\n'
+                'test "$1" = expected-argument\n'
+                'test -f "$HOME/SharedMemory/state/config.json"\n'
+                'export BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state"\n'
+                ': > "$HOME/native-started"\n'
+                "shift\n"
+                f'exec {shlex.join(config.native_command)} "$@"\n'
+            )
+            native.chmod(0o700)
+            selected = config.model_copy(
+                update={
+                    "native_command": [str(native), "expected-argument"],
+                    "proposals_dir": tmp_path / "live-approvals",
+                    "audit_log": tmp_path / "live-audit.jsonl",
+                    "env": {"APPROVAL_GATE_NATIVE_MODE": "local", "BASIC_MEMORY_CONFIG_DIR": "/example/live/state"},
+                }
+            )
+            Path(expected).write_text(selected.model_dump_json())
         command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", expected])
         wrapper.write_text(f'#!/bin/sh\ncd {shlex.quote(str(checkout))} && exec {command} "$@"\n')
         wrapper.chmod(0o700)
@@ -140,6 +180,9 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
 
     asyncio.run(check())
     assert config.proposals_dir.is_dir()
+    if selected_path is None:
+        assert (home / "native-started").is_file()
+        assert not (tmp_path / "live-approvals").exists()
 
 
 def test_durable_write_requires_owner_approval_and_then_persists(proxy):

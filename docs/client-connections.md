@@ -65,10 +65,14 @@ installer's and the client's `PATH`. Repeat it for any project-local overrides.
 Before changing launcher entries, the script starts each replacement launcher
 without arguments and checks that it selects the approval-gate configuration
 passed to the installer. The launcher must preserve its environment so the
-proxy can do this check and then open a disposable store. Integration tests use
-staged dependencies and the candidate wheel. The installer updates the live
-environment after the tests pass. Use `--test` to run the native integration
-suite when installing only the gate dependencies. Entries that pass
+proxy can do this check and then start the configured native command against a
+disposable store. Native wrappers must honor the test store settings or derive
+their store paths from `HOME`, as the Toolbox launcher does. Integration tests
+use staged dependencies and the candidate wheel. The installer updates the live
+environment after the tests pass. If updating a client configuration fails, it
+restores earlier launcher changes when their files still match what it wrote.
+Use `--test` to run the native integration suite when installing only the gate
+dependencies. Entries that pass
 arguments to the native launcher need a separate edit to remove those arguments
 when switching to the proxy. Restart the clients after changing their launcher
 entries.

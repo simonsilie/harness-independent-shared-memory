@@ -2,11 +2,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from stat import S_IMODE
 from unittest.mock import Mock
 
 import pytest
 
 from approval_gate import install, proxy
+from approval_gate.config import Config
 
 
 @pytest.fixture
@@ -139,23 +141,72 @@ def test_wheel_is_installed_in_live_environment_after_tests(tmp_path, installer)
     assert commands[candidate][-1] == commands[live][-1] != str(wheel)
 
 
+@pytest.mark.parametrize("concurrent_edit", [False, True])
+def test_launcher_migration_rolls_back_after_replacement_failure(tmp_path, installer, monkeypatch, concurrent_edit):
+    args, _ = installer
+    first, second = tmp_path / "first.toml", tmp_path / "second.toml"
+    original = b'[mcp_servers.basic_memory]\r\ncommand = "/example/old-launcher"\r\n'
+    launcher = str(tmp_path / "new-launcher")
+    for path in (first, second):
+        path.write_bytes(original)
+        path.chmod(0o640)
+        args.extend(["--replace-launcher", str(path), "/example/old-launcher", launcher])
+
+    replace = Path.replace
+    edited = original + b"# edited after the switch\r\n"
+
+    def replace_or_fail(source, target):
+        if target == second:
+            assert launcher.encode() in first.read_bytes()
+            if concurrent_edit:
+                first.write_bytes(edited)
+            raise PermissionError(target)
+        return replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", replace_or_fail)
+
+    assert install.main() == 1
+    assert first.read_bytes() == (edited if concurrent_edit else original)
+    assert second.read_bytes() == original
+    assert S_IMODE(first.stat().st_mode) == 0o640
+    assert set(tmp_path.glob("tmp*")) == set()
+
+
 @pytest.mark.parametrize("matches", [False, True])
-def test_proxy_checks_launcher_configuration_before_loading_disposable_store(tmp_path, monkeypatch, matches):
+def test_proxy_uses_selected_native_command_with_disposable_store(tmp_path, monkeypatch, matches):
     expected = tmp_path / "gate.json"
     disposable = tmp_path / "disposable.json"
     selected = expected if matches else tmp_path / "different.json"
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_CONFIG", str(selected))
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_CHECK_CONFIG", str(expected))
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_TEST_CONFIG", str(disposable))
-    load_config = Mock()
+    configured = Config(
+        native_command=["configured", "argument"],
+        proposals_dir=tmp_path / "live-approvals",
+        audit_log=tmp_path / "live-audit.jsonl",
+        env={"LAUNCHER_OPTION": "value", "BASIC_MEMORY_CONFIG_DIR": "/example/live/state"},
+        ttl_hours=10,
+    )
+    test_config = Config(
+        native_command=["fixture"],
+        proposals_dir=tmp_path / "test-approvals",
+        audit_log=tmp_path / "test-audit.jsonl",
+        env={"BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "test-state")},
+    )
+    load_config = Mock(side_effect={expected: configured, disposable: test_config}.__getitem__)
     monkeypatch.setattr(proxy, "load_config", load_config)
     run_proxy = Mock(return_value=0)
     monkeypatch.setattr(proxy, "run_proxy", run_proxy)
 
     if matches:
         assert proxy.main([]) == 0
-        load_config.assert_called_once_with(disposable)
-        run_proxy.assert_called_once_with(load_config.return_value, disposable)
+        active, active_path = run_proxy.call_args.args
+        assert active_path == disposable
+        assert active.native_command == configured.native_command
+        assert active.ttl_hours == configured.ttl_hours
+        assert active.env == {"LAUNCHER_OPTION": "value", **(test_config.env or {})}
+        assert active.proposals_dir == test_config.proposals_dir
+        assert active.audit_log == test_config.audit_log
     else:
         with pytest.raises(SystemExit) as error:
             proxy.main([])

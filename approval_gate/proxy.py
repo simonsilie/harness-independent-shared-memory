@@ -222,11 +222,21 @@ def main(argv: list[str] | None = None) -> int:
     config_path = args.config
     expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
     disposable = os.environ.get("SHARED_MEMORY_APPROVAL_TEST_CONFIG")
-    if expected or disposable:
-        if not expected or not disposable or config_path.resolve() != Path(expected).resolve():
-            parser.error("Launcher did not select the requested approval-gate configuration")
-        config_path = Path(disposable)
+    if (expected or disposable) and (
+        not expected or not disposable or config_path.resolve() != Path(expected).resolve()
+    ):
+        parser.error("Launcher did not select the requested approval-gate configuration")
     config = load_config(config_path)
+    if disposable:
+        config_path = Path(disposable)
+        test_config = load_config(config_path)
+        config = config.model_copy(
+            update={
+                "env": (config.env or {}) | (test_config.env or {}),
+                "proposals_dir": test_config.proposals_dir,
+                "audit_log": test_config.audit_log,
+            }
+        )
     return run_proxy(config, config_path)
 
 
