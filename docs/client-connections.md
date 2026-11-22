@@ -31,8 +31,8 @@ The gate uses the same environment and runs `bin/shared-memory-mcp` as its
 native server. From the checkout, run
 `.venv/bin/python approval_gate/install.py --config /path/to/approval-gate.json`.
 The script reads the gate's dependency pins from `uv.lock` and
-targets an existing Basic Memory environment. Pass `--wheel` to install a
-prebuilt patched wheel in the same step. Otherwise, the installed Basic Memory
+targets an existing Basic Memory environment. Pass `--wheel` to test and install
+a prebuilt patched wheel in the same step. Otherwise, the installed Basic Memory
 version stays in place.
 
 Pass the approval-gate configuration directly with `--config`. For Toolbox,
@@ -62,11 +62,13 @@ Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
 configuration and its exact old and new command values. Use an absolute
 executable path, an OpenCode `{env:HOME}` path, or a command on both the
 installer's and the client's `PATH`. Repeat it for any project-local overrides.
-Before changing launcher entries, the script runs the native integration tests
-and starts each replacement launcher with a disposable store. The launcher must
-forward `--config` to the proxy and preserve its environment so the check can
-verify the selected store. Use `--test` to run the native integration suite when
-installing the gate dependencies alone. Entries that pass
+Before changing launcher entries, the script starts each replacement launcher
+without arguments and checks that it selects the approval-gate configuration
+passed to the installer. The launcher must preserve its environment so the
+proxy can do this check and then open a disposable store. Integration tests use
+staged dependencies and the candidate wheel. The installer updates the live
+environment after the tests pass. Use `--test` to run the native integration
+suite when installing only the gate dependencies. Entries that pass
 arguments to the native launcher need a separate edit to remove those arguments
 when switching to the proxy. Restart the clients after changing their launcher
 entries.

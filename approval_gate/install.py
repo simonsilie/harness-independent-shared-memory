@@ -12,7 +12,7 @@ import tomllib
 from contextlib import ExitStack
 from pathlib import Path
 from stat import S_IMODE
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 JSON_STRING = r'"(?:[^"\\]|\\.)*"'
@@ -21,7 +21,7 @@ JSONC = re.compile(rf"({JSON_STRING})|{JSON_COMMENT}|,(?=(?:\s|{JSON_COMMENT})*[
 TOML_COMMAND = re.compile(rf"(?m)^[ \t]*command[ \t]*=[ \t]*({JSON_STRING}|'[^'\r\n]*')")
 
 
-def plan_switch(path: Path, old: str, new: str) -> tuple[str, str, str]:
+def plan_switch(path: Path, old: str, new: str) -> tuple[str, str, dict]:
     original = path.read_bytes().decode()
     replacement = json.dumps(new, ensure_ascii=False)
     executable = new
@@ -40,6 +40,7 @@ def plan_switch(path: Path, old: str, new: str) -> tuple[str, str, str]:
         candidates = (match.span() for match in re.finditer(JSON_STRING, document) if parse(match[0]) == old)
         old_command, new_command = [old], [new]
         executable = re.sub(r"\{env:([^{}]+)\}", lambda match: os.environ.get(match[1], ""), executable)
+        env_key = "environment"
     else:
         document = original
         parse = tomllib.loads
@@ -56,14 +57,21 @@ def plan_switch(path: Path, old: str, new: str) -> tuple[str, str, str]:
             if parse(f"command = {match[1]}")["command"] == old
         )
         old_command, new_command = old, new
+        env_key = "env"
     if len(servers) != 1:
         raise ValueError(f"{path}: expected exactly one matching MCP server without arguments")
-    resolved = shutil.which(executable)
+    server = servers[0]
+    environment = server.get(env_key, {})
+    if not isinstance(environment, dict) or not all(isinstance(value, str) for value in environment.values()):
+        raise ValueError(f"{path}: expected string values for MCP server environment")
+    resolved = shutil.which(executable, path=environment.get("PATH"))
     if not resolved or ("/" in executable and not Path(executable).is_absolute()):
         raise ValueError(f"{path}: replacement launcher is not executable: {new!r}")
-    launcher = str(Path(resolved).absolute())
-    if servers[0]["command"] == old_command and old != new:
-        servers[0]["command"] = new_command
+    launcher = {"command": str(Path(resolved).absolute()), "env": environment}
+    if env_key == "env" and server.get("cwd"):
+        launcher["cwd"] = server["cwd"]
+    if server["command"] == old_command and old != new:
+        server["command"] = new_command
         for start, end in candidates:
             if parse(document[:start] + replacement + document[end:]) == expected:
                 return original, original[:start] + replacement + original[end:], launcher
@@ -78,7 +86,9 @@ def main() -> int:
     )
     parser.add_argument("--config", type=Path, required=True, help="existing approval-gate JSON configuration")
     parser.add_argument(
-        "--wheel", type=Path, help="install a prebuilt Basic Memory wheel alongside the gate dependencies"
+        "--wheel",
+        type=Path,
+        help="install a prebuilt Basic Memory wheel alongside the gate dependencies (implies --test)",
     )
     parser.add_argument("--test", action="store_true", help="run the native integration tests (requires pytest)")
     parser.add_argument("--dry-run", action="store_true", help="show the commands and configuration changes")
@@ -110,52 +120,72 @@ def main() -> int:
             for package in packages
             if package["name"] in {"configargparse", "loguru"}
         ]
-        commands = [
-            [
-                str(python),
-                "-c",
-                "from approval_gate.config import load_config; from pathlib import Path; "
-                "import shutil, sys; native = load_config(Path(sys.argv[1])).native_command[0]; "
-                "sys.exit(None if shutil.which(native) else f'Native launcher is not executable: {native}')",
-                str(config),
-            ],
-            [uv, "pip", "install", "--python", str(python), "--no-deps", *pins, *([str(wheel)] if wheel else [])],
-            [str(python), "-m", "approval_gate.proxy", "--help"],
+        check_config = [
+            str(python),
+            "-c",
+            "from approval_gate.config import load_config; from pathlib import Path; "
+            "import shutil, sys; native = load_config(Path(sys.argv[1])).native_command[0]; "
+            "sys.exit(None if shutil.which(native) else f'Native launcher is not executable: {native}')",
+            str(config),
         ]
+        install = [uv, "pip", "install", "--python", str(python), "--no-deps"]
         changes = {}
-        launchers = set()
+        launchers = []
         for filename, old, new in args.replace_launcher:
             path = Path(filename).expanduser().resolve(strict=True)
             if path == config or path in changes:
                 raise ValueError(f"{path}: expected a distinct client configuration")
-            original, updated, executable = plan_switch(path, old, new)
+            original, updated, launcher = plan_switch(path, old, new)
             changes[path] = original, updated
-            launchers.add(executable)
+            if launcher not in launchers:
+                launchers.append(launcher)
             if args.dry_run and original != updated:
                 print(f"Switch launcher in {path} from {old!r} to {new!r}")
 
-        if args.test or changes:
-            commands.insert(1, [str(python), "-c", "import pytest"])
-            commands.append(
-                [
-                    "/usr/bin/env",
-                    f"SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS={json.dumps(sorted(launchers))}",
-                    str(python),
-                    "-m",
-                    "pytest",
-                    "-q",
-                    "tests/approval_gate/test_native_integration.py",
-                ]
-            )
-        for command in commands:
-            if args.dry_run:
-                print(shlex.join(command))
-            else:
-                subprocess.run(command, cwd=ROOT, check=True)
-
-        if args.dry_run:
-            return 0
         with ExitStack() as cleanup:
+            staging = Path("<staging>") if args.dry_run else Path(cleanup.enter_context(TemporaryDirectory()))
+            target = staging / "packages"
+            packages_to_install = pins.copy()
+            if wheel:
+                candidate = staging / wheel.name
+                if not args.dry_run:
+                    # Use the same bytes even if the original wheel is rebuilt during validation.
+                    shutil.copyfile(wheel, candidate)
+                packages_to_install.append(str(candidate))
+            env = {
+                "PYTHONPATH": os.pathsep.join(filter(None, (str(target), os.environ.get("PYTHONPATH")))),
+            }
+            if wheel:
+                env["SHARED_MEMORY_APPROVAL_TEST_NATIVE"] = str(target / "bin/basic-memory")
+
+            def run(command: list[str], overrides: dict[str, str] | None = None) -> None:
+                if args.dry_run:
+                    assignments = [
+                        f"{key}={value if key != 'SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS' else '<client launchers>'}"
+                        for key, value in (overrides or {}).items()
+                    ]
+                    print(shlex.join([*(["env", *assignments] if assignments else []), *command]))
+                else:
+                    subprocess.run(command, cwd=ROOT, check=True, env=os.environ | overrides if overrides else None)
+
+            run(check_config)
+            run_tests = args.test or bool(changes) or wheel is not None
+            if run_tests:
+                run([str(python), "-c", "import pytest"])
+            run([*install, "--target", str(target), *packages_to_install])
+            run([str(python), "-m", "approval_gate.proxy", "--help"], env)
+            if run_tests:
+                run(
+                    [str(python), "-m", "pytest", "-q", "tests/approval_gate/test_native_integration.py"],
+                    env
+                    | {
+                        "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS": json.dumps(launchers),
+                        "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": str(config),
+                    },
+                )
+            if args.dry_run:
+                run([*install, *packages_to_install])
+                return 0
             staged = {}
             for path, (original, updated) in changes.items():
                 if original != updated:
@@ -165,6 +195,10 @@ def main() -> int:
                         stream.write(updated.encode())
                     temporary.chmod(S_IMODE(path.stat().st_mode))
                     staged[path] = temporary
+            for path, (original, _) in changes.items():
+                if path.read_bytes().decode() != original:
+                    raise ValueError(f"{path}: configuration changed during installation")
+            run([*install, *packages_to_install])
             for path, (original, _) in changes.items():
                 if path.read_bytes().decode() != original:
                     raise ValueError(f"{path}: configuration changed during installation")

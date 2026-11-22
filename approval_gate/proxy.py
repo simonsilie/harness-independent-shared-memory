@@ -219,11 +219,15 @@ def main(argv: list[str] | None = None) -> int:
         "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
     )
     args = parser.parse_args(argv)
+    config_path = args.config
     expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
-    if expected and args.config.resolve() != Path(expected).resolve():
-        parser.error("Launcher did not select the disposable approval-gate configuration")
-    config = load_config(args.config)
-    return run_proxy(config, args.config)
+    disposable = os.environ.get("SHARED_MEMORY_APPROVAL_TEST_CONFIG")
+    if expected or disposable:
+        if not expected or not disposable or config_path.resolve() != Path(expected).resolve():
+            parser.error("Launcher did not select the requested approval-gate configuration")
+        config_path = Path(disposable)
+    config = load_config(config_path)
+    return run_proxy(config, config_path)
 
 
 if __name__ == "__main__":

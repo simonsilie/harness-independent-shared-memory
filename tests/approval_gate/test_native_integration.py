@@ -54,7 +54,11 @@ def store(tmp_path, monkeypatch):
         "FASTMCP_CHECK_FOR_UPDATES": "off",
         "HF_HUB_OFFLINE": "1",
     }
-    executable = Path(sys.executable).with_name("basic-memory")
+    executable = Path(
+        os.environ.get("SHARED_MEMORY_APPROVAL_TEST_NATIVE", Path(sys.executable).with_name("basic-memory"))
+    )
+    if "SHARED_MEMORY_APPROVAL_TEST_NATIVE" in os.environ:
+        env["PYTHONPATH"] = os.environ["PYTHONPATH"]
     subprocess.run(
         [str(executable), "reindex", "--full", "--search"],
         env=get_default_environment() | env,
@@ -97,18 +101,25 @@ def proxy(gate_config):
 )
 def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launcher):
     _, config, config_path = gate_config
+    expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG", str(tmp_path / "launcher-config.json"))
     if launcher is None:
         wrapper = tmp_path / "launcher"
         checkout = Path(__file__).resolve().parents[2]
-        command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", str(tmp_path / "unused.json")])
+        command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", expected])
         wrapper.write_text(f'#!/bin/sh\ncd {shlex.quote(str(checkout))} && exec {command} "$@"\n')
         wrapper.chmod(0o700)
-        launcher = str(wrapper)
+        launcher = {"command": str(wrapper), "env": {}}
+    env = {
+        **launcher["env"],
+        "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": expected,
+        "SHARED_MEMORY_APPROVAL_TEST_CONFIG": str(config_path),
+    }
+    if "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS" in os.environ:
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, (os.environ["PYTHONPATH"], env.get("PYTHONPATH"))))
     parameters = StdioServerParameters(
-        command=launcher,
-        args=["--config", str(config_path)],
-        cwd=tmp_path,
-        env={"SHARED_MEMORY_APPROVAL_CHECK_CONFIG": str(config_path)},
+        command=launcher["command"],
+        cwd=launcher.get("cwd", tmp_path),
+        env=env,
     )
 
     async def check():
