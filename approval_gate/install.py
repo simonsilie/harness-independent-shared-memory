@@ -30,7 +30,10 @@ def plan_switch(path: Path, old: str, new: str) -> tuple[str, str]:
         raise ValueError(f"{path}: expected exactly one matching single-executable command, found {len(matches)}")
     start, end = matches[0].span(2)
     updated = original[:start] + new + original[end:]
-    if not matches[0][1]:
+    executable = new_value
+    if matches[0][1]:
+        executable = re.sub(r"\{env:([^{}]+)\}", lambda match: os.environ.get(match[1], ""), executable)
+    else:
         expected = tomllib.loads(original)
         servers = [
             server
@@ -42,6 +45,8 @@ def plan_switch(path: Path, old: str, new: str) -> tuple[str, str]:
         servers[0]["command"] = new_value
         if tomllib.loads(updated) != expected:
             raise ValueError(f"{path}: replacement must only change the matching MCP server's command")
+    if ("/" in executable and not Path(executable).is_absolute()) or not shutil.which(executable):
+        raise ValueError(f"{path}: replacement launcher is not executable: {new_value!r}")
     return original, updated
 
 

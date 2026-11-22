@@ -62,8 +62,8 @@ patches and the output are recorded in `build/dist/manifest.json`. Pass
 `--wheel <pinned wheel>` to build from a local copy offline with the same hash check.
 
 ```sh
-uv run --locked build-memory-runtime build
-uv run --locked build-memory-runtime verify
+uv run --locked python build/semantic_runtime.py build
+uv run --locked python build/semantic_runtime.py verify
 ```
 
 `verify` first compares the wheel's SHA-256 with `wheel_sha256` in the manifest,

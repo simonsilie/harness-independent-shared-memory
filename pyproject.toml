@@ -17,8 +17,6 @@ dependencies = [
 ]
 
 [project.scripts]
-build-memory-runtime = "build.semantic_runtime:main"
-install-approval-gate = "approval_gate.install:main"
 memory-ops = "ops.__main__:main"
 
 [dependency-groups]
@@ -35,7 +33,7 @@ prerelease = "allow"
 basic-memory = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" }
 
 [tool.uv.build-backend]
-module-name = ["approval_gate", "build", "ops"]
+module-name = ["approval_gate", "ops"]
 module-root = ""
 source-exclude = ["/approval_gate/config.json", "/build/.verify-venv/**", "/build/dist/**"]
 

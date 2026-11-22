@@ -28,9 +28,9 @@ The Toolbox also provides `bin/shared-memory-approval-gate` and
 `dotfiles/shared-memory/approval-gate.json` for the
 [durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
 The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server. Run `uv run install-approval-gate` from the checkout or use
-`uv run --project /path/to/checkout install-approval-gate` from another working
-directory. The command reads the gate's dependency pins from `uv.lock` and
+native server. From the checkout, run
+`.venv/bin/python approval_gate/install.py --config /path/to/approval-gate.json`.
+The script reads the gate's dependency pins from `uv.lock` and
 targets an existing Basic Memory environment. Pass `--wheel` to install a
 prebuilt patched wheel in the same step. Otherwise, the installed Basic Memory
 version stays in place.
@@ -47,7 +47,7 @@ the paths and current command values below:
 
 ```sh
 checkout=/path/to/shared-memory-checkout
-uv run --project "$checkout" install-approval-gate \
+"$checkout/.venv/bin/python" "$checkout/approval_gate/install.py" \
   --python "$checkout/.venv/bin/python" \
   --config /path/to/approval-gate.json \
   --wheel /path/to/basic_memory-1.0.0+semantic.2-py3-none-any.whl \
@@ -59,9 +59,11 @@ uv run --project "$checkout" install-approval-gate \
 ```
 
 Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
-configuration and its exact old and new command values. Repeat it for any
-project-local overrides. The script runs the native integration tests against
-disposable stores before changing launcher entries. Use `--test` to run the
+configuration and its exact old and new command values. Use an absolute
+executable path, an OpenCode `{env:HOME}` path, or a command on both the
+installer's and the client's `PATH`. Repeat it for any project-local overrides.
+Before changing launcher entries, the script checks each new executable and
+runs the native integration tests against disposable stores. Use `--test` to run the
 same tests when installing the gate dependencies alone. Entries that pass
 arguments to the native launcher need a separate edit to remove those arguments
 when switching to the proxy. Restart the clients after changing their launcher

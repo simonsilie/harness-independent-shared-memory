@@ -25,7 +25,7 @@ uv sync --locked
 ```
 
 Run a command with `--help` to see its environment variables. For example,
-`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked build-memory-runtime build`
+`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked python build/semantic_runtime.py build`
 sets the output directory. Command-line arguments take precedence.
 `LOGURU_LEVEL` controls which status messages appear on stderr.
 
