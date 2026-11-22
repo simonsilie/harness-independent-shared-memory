@@ -41,6 +41,38 @@ def test_missing_launcher_stops_before_installation_or_configuration_changes(tmp
     assert (tmp_path / "second.toml").read_text() == original
 
 
+@pytest.mark.parametrize("invalid", ["proposals", "audit", "audit-parent", "overlapping", "inaccessible", None])
+def test_check_config_validates_storage_paths_without_changing_them(tmp_path, monkeypatch, invalid):
+    proposals = tmp_path / "store/approvals"
+    audit = tmp_path / "logs/audit.jsonl"
+    if invalid == "proposals":
+        proposals.parent.mkdir()
+        proposals.touch()
+    elif invalid == "audit":
+        audit.mkdir(parents=True)
+    elif invalid == "audit-parent":
+        audit.parent.touch()
+    elif invalid == "overlapping":
+        audit = proposals.parent
+    elif invalid == "inaccessible":
+        proposals.parent.mkdir()
+        access = install.os.access
+        monkeypatch.setattr(install.os, "access", lambda path, mode: path != proposals.parent and access(path, mode))
+    config = tmp_path / "gate.json"
+    config.write_text(
+        Config(native_command=[sys.executable], proposals_dir=proposals, audit_log=audit).model_dump_json()
+    )
+    before = sorted(tmp_path.rglob("*"))
+
+    if invalid:
+        with pytest.raises(ValueError, match="Audit log|approval-gate directory"):
+            install.check_config(config)
+    else:
+        install.check_config(config)
+
+    assert sorted(tmp_path.rglob("*")) == before
+
+
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_opencode_launcher_preserves_environment_placeholder(tmp_path, installer, monkeypatch, dry_run):
     args, run = installer

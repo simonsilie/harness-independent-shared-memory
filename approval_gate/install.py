@@ -21,6 +21,31 @@ JSONC = re.compile(rf"({JSON_STRING})|{JSON_COMMENT}|,(?=(?:\s|{JSON_COMMENT})*[
 TOML_COMMAND = re.compile(rf"(?m)^[ \t]*command[ \t]*=[ \t]*({JSON_STRING}|'[^'\r\n]*')")
 
 
+def check_config(path: Path) -> None:
+    from approval_gate.config import load_config
+
+    config = load_config(path)
+    native = config.native_command[0]
+    if not shutil.which(native, path=(config.env or {}).get("PATH")):
+        raise ValueError(f"Native launcher is not executable: {native}")
+
+    proposals, audit = config.proposals_dir, config.audit_log
+    if proposals.resolve().is_relative_to(audit.resolve()):
+        raise ValueError(f"Audit log must not be a directory used for proposals: {audit}")
+    audit_exists = audit.exists() or audit.is_symlink()
+    if audit_exists and (not audit.is_file() or not os.access(audit, os.W_OK)):
+        raise ValueError(f"Audit log must be a writable file: {audit}")
+    for directory, writable in ((proposals, True), (audit.parent, not audit_exists)):
+        ancestor = directory
+        while not ancestor.exists() and not ancestor.is_symlink():
+            ancestor = ancestor.parent
+        if not ancestor.is_dir() or not os.access(ancestor, os.X_OK | (os.W_OK if writable else 0)):
+            raise ValueError(f"Cannot access or create approval-gate directory {directory}: {ancestor}")
+    for existing in (proposals, audit):
+        if existing.exists() and os.geteuid() not in (0, existing.stat().st_uid):
+            raise ValueError(f"Cannot set private permissions on approval-gate path: {existing}")
+
+
 def plan_switch(path: Path, old: str, new: str) -> tuple[str, str, dict]:
     original = path.read_bytes().decode()
     replacement = json.dumps(new, ensure_ascii=False)
@@ -120,13 +145,11 @@ def main() -> int:
             for package in packages
             if package["name"] in {"configargparse", "loguru"}
         ]
-        check_config = [
+        validate_config = [
             str(python),
             "-c",
-            "from approval_gate.config import load_config; from pathlib import Path; "
-            "import shutil, sys; config = load_config(Path(sys.argv[1])); native = config.native_command[0]; "
-            "sys.exit(None if shutil.which(native, path=(config.env or {}).get('PATH')) "
-            "else f'Native launcher is not executable: {native}')",
+            "from approval_gate.install import check_config; from pathlib import Path; "
+            "import sys; check_config(Path(sys.argv[1]))",
             str(config),
         ]
         install = [uv, "pip", "install", "--python", str(python), "--no-deps"]
@@ -169,7 +192,7 @@ def main() -> int:
                 else:
                     subprocess.run(command, cwd=ROOT, check=True, env=os.environ | overrides if overrides else None)
 
-            run(check_config)
+            run(validate_config)
             run_tests = args.test or bool(changes) or wheel is not None
             if run_tests:
                 run([str(python), "-c", "import pytest"])

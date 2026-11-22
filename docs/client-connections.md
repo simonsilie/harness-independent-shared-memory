@@ -62,13 +62,14 @@ Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
 configuration and its exact old and new command values. Use an absolute
 executable path, an OpenCode `{env:HOME}` path, or a command on both the
 installer's and the client's `PATH`. Repeat it for any project-local overrides.
-Before changing launcher entries, the script starts each replacement launcher
-without arguments and checks that it selects the approval-gate configuration
-passed to the installer. The launcher must preserve its environment so the
-proxy can do this check and then start the configured native command against a
-disposable store. Native wrappers must honor the test store settings or derive
-their store paths from `HOME`, as the Toolbox launcher does. Integration tests
-use staged dependencies and the candidate wheel. The installer updates the live
+Before changing launcher entries, the script checks that the configured proposal
+and audit paths are usable. It starts each replacement launcher without arguments
+with a temporary `HOME` and disposable store settings, then checks that the
+launcher selects the approval-gate configuration passed to the installer. The
+replacement launcher must pass the test environment to the proxy. Native wrappers
+must honor the test store settings or derive their store paths from `HOME`, as
+the Toolbox launcher does. Integration tests use staged dependencies and the
+candidate wheel. The installer updates the live
 environment after the tests pass. If updating a client configuration fails, it
 restores earlier launcher changes when their files still match what it wrote.
 Use `--test` to run the native integration suite when installing only the gate

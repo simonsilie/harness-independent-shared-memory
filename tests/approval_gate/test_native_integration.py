@@ -146,16 +146,23 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
             )
             Path(expected).write_text(selected.model_dump_json())
         command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", expected])
-        wrapper.write_text(f'#!/bin/sh\ncd {shlex.quote(str(checkout))} && exec {command} "$@"\n')
+        wrapper.write_text(
+            "#!/bin/sh\nset -eu\n"
+            'test -f "$HOME/SharedMemory/state/config.json"\n'
+            f'test "$BASIC_MEMORY_CONFIG_DIR" = {shlex.quote(str(root / "state"))}\n'
+            ': > "$HOME/launcher-started"\n'
+            f'cd {shlex.quote(str(checkout))} && exec {command} "$@"\n'
+        )
         wrapper.chmod(0o700)
         launcher = {"command": str(wrapper), "env": {}}
     env = {
         **launcher["env"],
+        **test_env,
         "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": expected,
         "SHARED_MEMORY_APPROVAL_TEST_CONFIG": str(config_path),
     }
     if "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS" in os.environ:
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, (os.environ["PYTHONPATH"], env.get("PYTHONPATH"))))
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, (os.environ["PYTHONPATH"], launcher["env"].get("PYTHONPATH"))))
     parameters = StdioServerParameters(
         command=launcher["command"],
         cwd=launcher.get("cwd", tmp_path),
@@ -181,6 +188,7 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
     asyncio.run(check())
     assert config.proposals_dir.is_dir()
     if selected_path is None:
+        assert (home / "launcher-started").is_file()
         assert (home / "native-started").is_file()
         assert not (tmp_path / "live-approvals").exists()
 
