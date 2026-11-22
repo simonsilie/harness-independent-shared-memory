@@ -46,7 +46,11 @@ proposal and the note is absent while approval is pending. To restore the
 previous mode, select its launcher again and restart the client.
 
 For setups without the Toolbox gate wrapper and configuration, use the
+[installer](../README.md#install-the-launcher) or the
 [checkout configuration examples](../README.md#connect-your-coding-agent).
+The installer works from a fresh checkout after `uv sync --locked`; it only
+needs the client configuration path and an approval-gate configuration path and
+leaves unrelated settings untouched.
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).

@@ -52,10 +52,50 @@ cp approval_gate/config.example.json approval_gate/config.json
 
 Replace the placeholder paths in that file with absolute paths to your checkout
 and store. The proxy and the owner CLI share this configuration, including
-`BASIC_MEMORY_CONFIG_DIR`. Merge the server entry below into each client's
-existing configuration and replace the example paths, including the absolute
-path to `uv`. The launcher uses the environment created by `uv sync --locked`
-during setup.
+`BASIC_MEMORY_CONFIG_DIR`.
+
+#### Install the launcher
+
+Set up the runtime once from the checkout root before installing anything:
+
+```sh
+uv sync --locked
+```
+
+If the synced environment is missing, the installer prints this command and
+stops before changing any client configuration. Select the client, its
+configuration file and the gate configuration on every invocation. The first
+call only previews a unified diff:
+
+```sh
+uv run --locked --no-sync python -m approval_gate.install \
+  --client codex --client-config ~/.codex/config.toml \
+  --config /path/to/checkout/approval_gate/config.json
+
+uv run --locked --no-sync python -m approval_gate.install \
+  --client opencode --client-config ~/.config/opencode/opencode.jsonc \
+  --config /path/to/checkout/approval_gate/config.json
+```
+
+Add `--apply` to the same command to write the shown change. The installer
+creates a missing `basic_memory` entry or migrates an existing one to the
+launcher below, preserves foreign entries, comments and existing tool grants,
+and reports "No changes needed" when nothing would change. It uses only paths
+derived from the checkout, the client configuration and the gate configuration;
+it does not depend on the Toolbox repository, personal wrappers or a particular
+directory layout. Restart the affected client after applying.
+
+To revert, restore the native `command`/`args` (Codex) or `command` array
+(OpenCode) from the direct-connection description below, remove any
+`basic_memory_*` permission rules you no longer want and restart the client.
+The installer keeps no backup, so keep client configurations under version
+control before applying.
+
+The launcher written by the installer uses the start command documented here:
+`uv run --directory <checkout> --locked --no-sync python -m approval_gate.proxy --config <gate-config>`.
+Merge the server entry below manually only if you prefer to edit the client
+configuration yourself; replace the example paths, including the absolute path
+to `uv`.
 
 The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
 available for `list` and `recent` while blocking project creation by default.
