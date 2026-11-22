@@ -2,6 +2,7 @@
 
 import json
 import tomllib
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -190,3 +191,148 @@ def test_missing_runtime_aborts_before_any_configuration_change(checkout: Path, 
     with pytest.raises(install.InstallError, match=r"cd .* && uv sync --locked"):
         install.make_plan("codex", config, gate, root=without_runtime, uv="/fake/bin/uv")
     assert config.read_text() == CODEX
+
+
+@pytest.mark.parametrize(
+    "following",
+    [
+        '[mcp_servers.other]\ncommand = "other"\nargs = ["unchanged"]\n',
+        '[mcp_servers.basic_memory.env]\nSTORE = "unchanged"\n',
+        '[[agents]]\ncommand = "other"\nargs = ["unchanged"]\n',
+        "",
+    ],
+)
+def test_codex_inserts_missing_args_into_basic_memory_table_only(following: str) -> None:
+    original = "[mcp_servers.\"basic_memory\"]\ndescription = '''\n[not_a_table]\n'''\ncommand = \"native\"" + (
+        "\n\n" + following if following else ""
+    )
+    expected = tomllib.loads(original)
+    expected["mcp_servers"]["basic_memory"].update(command="uv", args=["run"])
+
+    updated = install.plan_toml(original, "uv", ["run"])
+
+    assert tomllib.loads(updated) == expected
+    assert updated.endswith(following)
+    assert install.plan_toml(updated, "uv", ["run"]) == updated
+
+
+@pytest.mark.parametrize(
+    ("rules", "expected"),
+    [
+        ([("basic_memory_bm_write", "deny"), ("basic_memory_bm_search", "allow")], ["deny", "allow", "allow", "deny"]),
+        ([("basic_memory_*", "deny"), ("basic_memory_bm_search", "allow")], ["deny", "allow", "deny", "deny"]),
+        ([("shell", "deny")], ["allow", "allow", "allow", "deny"]),
+    ],
+)
+def test_opencode_defaults_preserve_existing_permission_precedence(
+    rules: list[tuple[str, str]], expected: list[str]
+) -> None:
+    existing = [{"action": action, "resource": "*", "effect": effect} for action, effect in rules]
+    original = json.dumps({"permissions": existing})
+    updated = install.plan_jsonc(original, "uv", ["run"])
+    permissions = json.loads(install._mask(updated))["permissions"]
+    actions = [f"basic_memory_{tool}" for tool in ("bm_write", "bm_search", "bm_read", "bm_delete")]
+
+    assert [
+        next(rule["effect"] for rule in reversed(permissions) if fnmatchcase(action, rule["action"]))
+        for action in actions
+    ] == expected
+    assert permissions[-len(existing) :] == existing
+    assert install.plan_jsonc(updated, "uv", ["run"]) == updated
+
+
+def test_opencode_keeps_comments_after_trailing_commas() -> None:
+    original = """{
+  "mcp": {"servers": {"other": {"type": "local", "command": ["other"]}, /* keep block */}},
+  "permissions": [{"action": "shell", "resource": "*", "effect": "deny"}, // keep line
+  ],
+  "theme": "dark",
+}
+"""
+    updated = install.plan_jsonc(original, "uv", ["run"])
+    document = json.loads(install._mask(updated))
+
+    assert document["mcp"]["servers"]["other"]["command"] == ["other"]
+    assert document["mcp"]["servers"]["basic_memory"]["command"] == ["uv", "run"]
+    assert document["theme"] == "dark"
+    assert "/* keep block */" in updated
+    assert "// keep line" in updated
+    assert install.plan_jsonc(updated, "uv", ["run"]) == updated
+
+
+def test_apply_updates_the_target_of_a_relative_symlink(checkout: Path, tmp_path: Path) -> None:
+    target = tmp_path / "dotfiles.jsonc"
+    target.write_text(OPENCODE)
+    target.chmod(0o640)
+    config = tmp_path / "opencode.jsonc"
+    config.symlink_to(target.name)
+    gate = gate_config(tmp_path, checkout)
+
+    assert install.main(install_args("opencode", config, gate, apply=True)) == 0
+
+    assert config.readlink() == Path(target.name)
+    document = json.loads(install._mask(target.read_text()))
+    assert document["mcp"]["servers"]["basic_memory"]["command"][0] == "/fake/bin/uv"
+    assert target.stat().st_mode & 0o777 == 0o640
+
+
+def test_codex_migrates_the_assignment_outside_multiline_arguments(checkout: Path, tmp_path: Path) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text("""[mcp_servers.basic_memory]
+args = [
+    '''
+command = "argument text"
+''', # closing bracket ] in a comment
+]
+command = "/native#path" # keep this comment
+""")
+    gate = gate_config(tmp_path, checkout)
+
+    assert install.main(install_args("codex", config, gate, apply=True)) == 0
+    updated = config.read_text()
+    server = tomllib.loads(updated)["mcp_servers"]["basic_memory"]
+    assert server["command"] == "/fake/bin/uv"
+    assert server["args"][5:8] == ["python", "-m", "approval_gate.proxy"]
+    assert "# keep this comment" in updated
+
+
+def test_opencode_migrates_escaped_keys_and_preserves_existing_policies() -> None:
+    original = (
+        OPENCODE.replace('"mcp"', r'"\u006dcp"')
+        .replace('"permissions"', r'"\u0070ermissions"')
+        .replace('"command"', r'"\u0063ommand"')
+        .replace(
+            '"basic_memory_bm_search", "resource": "*", "effect": "allow"',
+            '"basic_memory_bm_write", "resource": "*", "effect": "deny"',
+        )
+    )
+
+    updated = install.plan_jsonc(original, "uv", ["run"])
+    document = json.loads(install._mask(updated))
+    servers = document["mcp"]["servers"]
+    assert servers["basic_memory"]["command"] == ["uv", "run"]
+    assert servers["other"]["command"] == ["other"]
+    assert document["permissions"][-1] == {"action": "basic_memory_bm_write", "resource": "*", "effect": "deny"}
+    assert install.plan_jsonc(updated, "uv", ["run"]) == updated
+
+
+@pytest.mark.parametrize(
+    ("original", "error"),
+    [
+        (
+            '{"mcp":{"servers":{"basic_memory":{"type":"remote","url":"https://example.invalid/mcp"}}}}',
+            "Only local OpenCode",
+        ),
+        (r'{"mcp":{},"\u006dcp":{}}', "Duplicate OpenCode setting 'mcp'"),
+    ],
+)
+def test_opencode_rejects_unsupported_migrations_without_changes(
+    checkout: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], original: str, error: str
+) -> None:
+    config = tmp_path / "opencode.jsonc"
+    config.write_text(original)
+    gate = gate_config(tmp_path, checkout)
+
+    assert install.main(install_args("opencode", config, gate, apply=True)) == 1
+    assert error in capsys.readouterr().err
+    assert config.read_text() == original

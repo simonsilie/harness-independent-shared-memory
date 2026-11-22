@@ -51,11 +51,12 @@ def _matching(text: str, start: int, opening: str, closing: str) -> int:
     raise InstallError(f"Unterminated {opening!r} at offset {start}")
 
 
-def _mask(text: str) -> str:
+def _mask(text: str, *, mask_trailing_commas: bool = True) -> str:
     """Blank JSONC comments and trailing commas while keeping every offset."""
     result = list(text)
     index = 0
     quoted = False
+    previous = -1
     while index < len(text):
         char = text[index]
         if quoted:
@@ -64,6 +65,7 @@ def _mask(text: str) -> str:
                 continue
             if char == '"':
                 quoted = False
+                previous = index
             index += 1
             continue
         if char == '"':
@@ -80,12 +82,10 @@ def _mask(text: str) -> str:
             result[index:end] = " " * (end - index)
             index = end
             continue
-        elif char == ",":
-            after = index + 1
-            while after < len(text) and text[after].isspace():
-                after += 1
-            if after < len(text) and text[after] in "}]":
-                result[index] = " "
+        elif not char.isspace():
+            if mask_trailing_commas and char in "}]" and previous >= 0 and text[previous] == ",":
+                result[previous] = " "
+            previous = index
         index += 1
     return "".join(result)
 
@@ -112,7 +112,7 @@ def _value_end(masked: str, start: int, end: int) -> int:
 
 def _member(masked: str, start: int, end: int, key: str) -> tuple[int, int, int] | None:
     """Return the key, value start and value end offsets of a direct object member."""
-    token = json.dumps(key)
+    member = None
     index = start + 1
     depth = 0
     while index < end:
@@ -125,15 +125,17 @@ def _member(masked: str, start: int, end: int, key: str) -> tuple[int, int, int]
                 if masked[stop] == '"':
                     break
                 stop += 1
-            if depth == 0 and masked[index : stop + 1] == token:
+            if depth == 0:
                 colon = stop + 1
                 while colon < end and masked[colon] in " \t\r\n":
                     colon += 1
-                if colon < end and masked[colon] == ":":
+                if colon < end and masked[colon] == ":" and json.loads(masked[index : stop + 1]) == key:
+                    if member is not None:
+                        raise InstallError(f"Duplicate OpenCode setting {key!r}")
                     value = colon + 1
                     while value < end and masked[value] in " \t\r\n":
                         value += 1
-                    return index, value, _value_end(masked, value, end)
+                    member = index, value, _value_end(masked, value, end)
             index = stop + 1
             continue
         if masked[index] in "[{":
@@ -141,7 +143,7 @@ def _member(masked: str, start: int, end: int, key: str) -> tuple[int, int, int]
         elif masked[index] in "]}":
             depth -= 1
         index += 1
-    return None
+    return member
 
 
 def _indent(text: str, position: int) -> str:
@@ -178,9 +180,9 @@ def plan_jsonc(original: str, uv: str, arguments: list[str]) -> str:
             )
             + "\n"
         )
-    masked = _mask(original)
+    masked = _mask(original, mask_trailing_commas=False)
     try:
-        document = json.loads(masked)
+        document = json.loads(_mask(masked))
     except json.JSONDecodeError as error:
         raise InstallError(f"Invalid JSON/JSONC client configuration: {error}") from error
     if not isinstance(document, dict) or not masked.strip().startswith("{"):
@@ -223,6 +225,8 @@ def plan_jsonc(original: str, uv: str, arguments: list[str]) -> str:
                 _, entry_value, entry_end = entry
                 if masked[entry_value] != "{":
                     raise InstallError("Expected the OpenCode 'basic_memory' entry to be an object")
+                if document["mcp"]["servers"]["basic_memory"].get("type") != "local":
+                    raise InstallError("Only local OpenCode 'basic_memory' entries can be migrated")
                 command = _member(masked, entry_value, entry_end, "command")
                 replacement = json.dumps([uv, *arguments])
                 if command is None:
@@ -234,14 +238,18 @@ def plan_jsonc(original: str, uv: str, arguments: list[str]) -> str:
     if permissions is None:
         insert(root_start, root_end, json.dumps("permissions") + ": " + json.dumps(PERMISSIONS))
     else:
-        _, value, value_end = permissions
+        _, value, _ = permissions
         if masked[value] != "[":
             raise InstallError("Expected the OpenCode 'permissions' setting to be an array")
         existing = document.get("permissions") or []
         present = {json.dumps(rule, sort_keys=True) for rule in existing if isinstance(rule, dict)}
         missing = [rule for rule in PERMISSIONS if json.dumps(rule, sort_keys=True) not in present]
-        for rule in missing:
-            insert(value, value_end, json.dumps(rule))
+        if missing:
+            # OpenCode uses the last matching rule, so existing policies take precedence.
+            indent = _indent(original, value) + "  "
+            defaults = f",\n{indent}".join(json.dumps(rule) for rule in missing)
+            separator = "," if existing else ""
+            edits.append((value + 1, value + 1, f"\n{indent}{defaults}{separator}"))
 
     for (start, end), snippets in insertions.items():
         edits.append((end, end, _insert(masked, original, start, end, snippets)))
@@ -250,33 +258,45 @@ def plan_jsonc(original: str, uv: str, arguments: list[str]) -> str:
     return original
 
 
-def _toml_value_end(text: str, start: int) -> int:
-    if text[start] == "[":
-        return _matching(text, start, "[", "]")
-    end = text.find("\n", start)
-    return len(text) if end == -1 else end
-
-
 def _toml_assign(block: str, key: str, value: str | list[str]) -> str:
-    match = re.search(rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=", block)
     rendered = json.dumps(value)
-    if match is None:
-        return block + f"{key} = {rendered}\n"
-    start = match.end()
-    while start < len(block) and block[start] in " \t":
-        start += 1
-    end = _toml_value_end(block, start)
-    line_end = block.find("\n", end)
-    line_end = len(block) if line_end == -1 else line_end
-    trailing = re.search(r"#[^\r\n]*", block[end:line_end])
-    comment = f" {trailing.group(0)}" if trailing else ""
-    prefix = block[match.start() : start]
-    return f"{block[: match.start()]}{prefix}{rendered}{comment}{block[line_end:]}"
+    token = re.escape(key)
+    for match in re.finditer(rf"""(?m)^[ \t]*(?:{token}|"{token}"|'{token}')[ \t]*=[ \t]*""", block):
+        # An unparseable prefix means the apparent assignment is inside another value.
+        try:
+            tomllib.loads(block[: match.start()])
+        except tomllib.TOMLDecodeError:
+            continue
+        start = match.end()
+        for boundary in re.finditer(r"#|\n|\Z", block[start:]):
+            end = start + boundary.start()
+            try:
+                tomllib.loads(block[match.start() : end])
+            except tomllib.TOMLDecodeError:
+                continue
+            end = start + len(block[start:end].rstrip(" \t"))
+            return block[:start] + rendered + block[end:]
+        raise InstallError(f"Invalid TOML value for {key!r}")
+
+    separator = "" if block.endswith("\n") else "\n"
+    return block + f"{separator}{key} = {rendered}\n"
 
 
 def plan_toml(original: str, uv: str, arguments: list[str]) -> str:
-    header = re.compile(r"(?m)^[ \t]*\[mcp_servers\.basic_memory\][^\r\n]*$")
-    match = header.search(original)
+    headers = re.finditer(r"(?m)^[ \t]*\[.*\][ \t]*(?:#[^\r\n]*)?$", original)
+    match = None
+    end = len(original)
+    for header in headers:
+        try:
+            table = tomllib.loads(header.group())
+            tomllib.loads(original[: header.start()])
+        except tomllib.TOMLDecodeError:
+            continue
+        if match is not None:
+            end = header.start()
+            break
+        if table == {"mcp_servers": {"basic_memory": {}}}:
+            match = header
     if match is None:
         block = (
             "[mcp_servers.basic_memory]\n"
@@ -288,8 +308,6 @@ def plan_toml(original: str, uv: str, arguments: list[str]) -> str:
             "" if not original else ("" if original.endswith("\n\n") else "\n" if original.endswith("\n") else "\n\n")
         )
         return original + separator + block
-    end = header.search(original, match.end())
-    end = end.start() if end else len(original)
     block = original[match.start() : end]
     block = _toml_assign(_toml_assign(block, "command", uv), "args", arguments)
     return original[: match.start()] + block + original[end:]
@@ -364,9 +382,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        original, updated = make_plan(
-            args.client, args.client_config.expanduser(), args.config.expanduser(), uv=shutil.which("uv")
-        )
+        client_config = args.client_config.expanduser().resolve()
+        original, updated = make_plan(args.client, client_config, args.config.expanduser(), uv=shutil.which("uv"))
     except InstallError as error:
         print(error, file=sys.stderr)
         return 1
@@ -389,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Preview only; repeat with --apply to write this change.")
         return 0
     try:
-        write_config(args.client_config.expanduser(), updated)
+        write_config(client_config, updated)
     except OSError as error:
         print(f"Could not write {args.client_config}: {error}", file=sys.stderr)
         return 1

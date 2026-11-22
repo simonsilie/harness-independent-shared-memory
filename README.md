@@ -80,16 +80,16 @@ uv run --locked --no-sync python -m approval_gate.install \
 Add `--apply` to the same command to write the shown change. The installer
 creates a missing `basic_memory` entry or migrates an existing one to the
 launcher below, preserves foreign entries, comments and existing tool grants,
-and reports "No changes needed" when nothing would change. It uses only paths
-derived from the checkout, the client configuration and the gate configuration;
+and reports "No changes needed" when nothing would change. Existing OpenCode
+permission rules take precedence over installer defaults. The installer
+migrates local OpenCode entries. It uses only paths derived from the checkout,
+the client configuration and the gate configuration;
 it does not depend on the Toolbox repository, personal wrappers or a particular
 directory layout. Restart the affected client after applying.
 
-To revert, restore the native `command`/`args` (Codex) or `command` array
-(OpenCode) from the direct-connection description below, remove any
-`basic_memory_*` permission rules you no longer want and restart the client.
-The installer keeps no backup, so keep client configurations under version
-control before applying.
+The installer keeps no backup. Save the current configuration before applying.
+To revert, restore the saved configuration or undo the changes shown in the
+installer diff, then restart the client.
 
 The launcher written by the installer uses the start command documented here:
 `uv run --directory <checkout> --locked --no-sync python -m approval_gate.proxy --config <gate-config>`.
