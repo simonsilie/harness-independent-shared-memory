@@ -1,8 +1,7 @@
 # Productive Codex and OpenCode connections
 
-Both clients use the native Basic Memory service and the external store at
-`$HOME/SharedMemory`. The historical corpus remains separate. No workflow facade,
-reviewer identity or new software dependency was introduced.
+The client launchers use the native Basic Memory service and the external store
+at `$HOME/SharedMemory`. The historical corpus remains separate.
 
 ## Configuration and ownership
 
@@ -21,21 +20,41 @@ The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
 refuses an unpatched runtime before native startup. It forces local routing,
 semantic search off, automatic updates and Logfire off, polling-based file
 watching and private file permissions. Moving the checkout requires adjusting
-the launcher; rebuilding the environment requires reapplying the patch.
+the launcher. Run `uv sync --locked` from the root of this shared-memory
+repository to install the patched runtime and gate dependencies.
 
-The Toolbox also provides `bin/shared-memory-approval-gate` and
-`dotfiles/shared-memory/approval-gate.json` for the
+Toolbox checkouts with `bin/shared-memory-approval-gate` and
+`dotfiles/shared-memory/approval-gate.json` can use the
 [durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
 The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server. The installed environment must include the gate's Python
-dependencies before rollout. Activation changes the client launcher path.
+native server. From the same shared-memory checkout, verify the proxy against
+disposable stores with
+`uv run --locked --no-sync pytest -m integration tests/approval_gate`.
+
+Check the effective server entry, including any project-local override, to see
+which launcher a client will use.
+
+With explicit owner approval, select the launcher in each client's
+`basic_memory` server entry. Use `bin/shared-memory-approval-gate` for terminal
+approval or `bin/shared-memory-mcp` for chat approval. Supply the absolute Toolbox
+path in Codex and use the existing `{env:HOME}` substitution in OpenCode. The
+Toolbox wrappers take no MCP arguments from the client. Preserve the client tool
+permissions and restart each affected client. Check that `bm_project` with
+`command="list"` returns the expected projects. To verify the gate, propose a
+synthetic durable note in a disposable project. Check that the client receives a
+proposal and the note is absent while approval is pending. To restore the
+previous mode, select its launcher again and restart the client.
+
+For setups without the Toolbox gate wrapper and configuration, use the
+[checkout configuration examples](../README.md#connect-your-coding-agent).
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).
 Codex receives the resolved absolute launcher path. Its server is optional
 (`required=false`) so memory startup failure does not block other work; tool
 approval mode remains `approve`, preserving the existing client behavior.
-Durable-write approval is the explicit chat convention described below.
+Direct connections apply the chat convention described below. Connections through
+the gate require terminal approval for durable writes.
 
 Both clients expose exactly these Basic Memory tools for ordinary sessions:
 `bm_project`, `bm_search`, `bm_read`, `bm_write`. Native checksum-conditional
@@ -52,7 +71,7 @@ text recall at startup and as new topics arise, explicit active scopes, reading
 relevant hits, sources and conflict reporting, and visible nonblocking outages.
 Durable findings and preferences require presenting concrete content and receiving
 explicit owner approval before saving. Temporary saves need no individual approval.
-These are workflow instructions, not a technical approval or access-control boundary.
+The gate enforces terminal approval on its MCP write path.
 Seven-day inactivity and archive rules are caller responsibilities. The
 [verified lifecycle addition](temporary-context.md) is now activated in the
 shared AGENTS file.

@@ -89,7 +89,9 @@ class OpenCodeChecks(unittest.TestCase):
                     iter(corpus) if path == ROOT / "evaluation/corpus" and pattern == "*.md" else globs(path, pattern)
                 ),
             ),
-            patch.object(Path, "write_text", lambda path, text: writes.update({path.name: text})),
+            patch.object(
+                Path, "write_text", lambda path, text: writes.update({path.relative_to(out).as_posix(): text})
+            ),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             runpy.run_path(str(SCRIPTS / script), run_name="__main__")
@@ -183,6 +185,8 @@ class OpenCodeChecks(unittest.TestCase):
                 }
             )
         writes = self.check_script("verify.py", calls, json.dumps(results))
+        self.assertEqual(set(writes), {"results.json", "tool-calls.json", "verification-summary.json"})
+        self.assertEqual(json.loads(writes["results.json"]), results)
         summary = json.loads(writes["verification-summary.json"])
         self.assertFalse(summary["served_source_revisions_verified"])
         self.assertEqual(summary["returned_ids_without_verified_source_revision"], ["memory-20"])

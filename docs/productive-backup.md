@@ -14,7 +14,7 @@ Use the existing patched Basic Memory 1.0.0 project environment. From this check
 choose a fresh identifier for each backup and run:
 
 ```sh
-uv run --locked --no-sync python -m ops backup \
+uv run --locked memory-ops backup \
   "$HOME/SharedMemory" "$HOME/SharedMemoryBackups/<identifier>"
 ```
 
@@ -55,7 +55,7 @@ a guarantee of cross-version compatibility.
 Restore only into a new, separate destination:
 
 ```sh
-uv run --locked --no-sync python -m ops restore \
+uv run --locked memory-ops restore \
   "$HOME/SharedMemoryBackups/<identifier>" \
   "$HOME/SharedMemoryRecovery/<identifier>"
 ```
@@ -69,7 +69,7 @@ storage, obtain the SHA-256 of its `manifest.json` over a trusted channel and
 pass it so the restored copy is checked against that value as well:
 
 ```sh
-uv run --locked --no-sync python -m ops restore \
+uv run --locked memory-ops restore \
   --expected-manifest-digest <digest> \
   "$HOME/SharedMemoryBackups/<identifier>" \
   "$HOME/SharedMemoryRecovery/<identifier>"

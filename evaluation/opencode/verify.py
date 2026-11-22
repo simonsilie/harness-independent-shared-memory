@@ -134,7 +134,6 @@ assert json.loads((OUT / "corpus-before.json").read_text()) == json.loads((OUT /
 )
 (OUT / "results.json").write_text(json.dumps(results, indent=2) + "\n")
 (OUT / "tool-calls.json").write_text(json.dumps(calls, indent=2) + "\n")
-(ROOT / "evaluation/results-opencode.json").write_text(json.dumps(results, indent=2) + "\n")
 summary = {
     "returned_permalinks_verified": True,
     "local_corpus_source_revision_verified": True,
@@ -148,5 +147,5 @@ logger.info(
     f"effective inventory {sorted(inventory)}, returned ID order, local corpus provenance, and unchanged corpus. "
     f"Served source revisions verified: {summary['served_source_revisions_verified']}. "
     f"Search latency {min(latencies):.0f}-{max(latencies):.0f} ms, median {statistics.median(latencies):.0f} ms. "
-    f"Wrote results-opencode.json."
+    f"Wrote {OUT / 'results.json'}."
 )

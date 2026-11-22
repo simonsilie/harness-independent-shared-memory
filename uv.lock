@@ -181,8 +181,8 @@ wheels = [
 
 [[package]]
 name = "basic-memory"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
+version = "1.0.0+semantic.2"
+source = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiosqlite" },
@@ -228,10 +228,63 @@ dependencies = [
     { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/62/6c590dc9bdae8006f1b6bc0d4c40c1b9cdfb1586467f58e0fbc9b59bb9b9/basic_memory-1.0.0.tar.gz", hash = "sha256:a0eddfdb5fe1aaac1f5ce025eb11af4517995f7f4fd2648ff4b08e0286073504", size = 5015101, upload-time = "2026-10-29T23:45:55.454Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/e8/64511d7619dd8ef3208ba4fa2b7df6ea3591f96ed33fce0021d81ebcdc07/basic_memory-1.0.0-py3-none-any.whl", hash = "sha256:a2d2c1589616c9599aec9edd6597d508028c5af88632312fc0990dcaccf02867", size = 1883480, upload-time = "2026-10-29T23:45:53.69Z" },
+    { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl", hash = "sha256:59024a4bad14abbeffc571f51945ebb0acfb3423099c267535fa13f09c988591" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiofiles", specifier = ">=24.1.0" },
+    { name = "aiosqlite", specifier = ">=0.20.0" },
+    { name = "alembic", specifier = ">=1.14.1" },
+    { name = "anyio", specifier = ">=4.10.0" },
+    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "dateparser", specifier = ">=1.2.0" },
+    { name = "fastapi", extras = ["standard"], specifier = "==0.162.0" },
+    { name = "fastapi-redis-sdk", specifier = "==0.8.1" },
+    { name = "fastembed", specifier = ">=0.7.4" },
+    { name = "fastmcp", specifier = "==4.1.3" },
+    { name = "filelock", specifier = ">=3.12" },
+    { name = "greenlet", specifier = ">=3.1.1" },
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "litellm", marker = "extra == 'litellm'", specifier = ">=1.91.5,<1.92.0" },
+    { name = "logfire", specifier = ">=4.19.0" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "markdown-it-py", specifier = ">=3.0.0" },
+    { name = "markitdown", extras = ["docx", "pptx"], marker = "extra == 'documents'", specifier = ">=0.1.7,<0.2" },
+    { name = "mcp", specifier = ">=2,<3" },
+    { name = "mdformat", specifier = ">=0.7.22" },
+    { name = "mdformat-frontmatter", specifier = ">=2.0.8" },
+    { name = "mdformat-gfm", specifier = ">=0.3.7" },
+    { name = "openai", specifier = ">=1.100.2" },
+    { name = "pathspec", specifier = ">=1.1.1,<2" },
+    { name = "pdf-inspector", marker = "extra == 'pdf'", specifier = ">=0.2.6,<2" },
+    { name = "pillow", specifier = ">=11.1.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
+    { name = "psycopg", specifier = "==3.3.1" },
+    { name = "pybars3", specifier = ">=0.9.7" },
+    { name = "pydantic", extras = ["email", "timezone"], specifier = ">=2.12.0" },
+    { name = "pydantic-settings", specifier = ">=2.6.1" },
+    { name = "pyjwt", specifier = ">=2.15.0" },
+    { name = "pymilvus", marker = "sys_platform == 'win32' and extra == 'milvus'", specifier = ">=3.0.0,<4" },
+    { name = "pymilvus", extras = ["milvus-lite"], marker = "sys_platform != 'win32' and extra == 'milvus'", specifier = ">=3.0.0,<4" },
+    { name = "pyright", specifier = ">=1.1.390" },
+    { name = "pytest-aio", specifier = ">=1.9.0" },
+    { name = "pytest-asyncio", specifier = ">=1.2.0" },
+    { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "python-frontmatter", specifier = ">=1.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=8.0.0,<9" },
+    { name = "rich", specifier = ">=13.9.4" },
+    { name = "sniffio", specifier = ">=1.3.1" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "sqlite-vec", specifier = ">=0.1.6" },
+    { name = "typer", specifier = ">=0.9.0" },
+    { name = "unidecode", specifier = ">=1.3.8" },
+    { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
+    { name = "watchfiles", specifier = ">=1.0.4" },
+]
+provides-extras = ["documents", "litellm", "milvus", "pdf", "redis"]
 
 [[package]]
 name = "beartype"
@@ -1105,7 +1158,7 @@ wheels = [
 [[package]]
 name = "harness-independent-shared-memory"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "basic-memory" },
     { name = "configargparse" },
@@ -1122,7 +1175,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "basic-memory", specifier = "==1.0.0" },
+    { name = "basic-memory", url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" },
     { name = "configargparse", specifier = ">=1.7.5" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "pydantic", specifier = ">=2" },

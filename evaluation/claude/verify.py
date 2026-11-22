@@ -111,9 +111,8 @@ for result in declared:
     assert result["retrieved_ids"] == call["ids"], result["question_id"]
     assert isinstance(result["recognized_missing_evidence"], bool), result["question_id"]
 assert not any(searches.values()), "Unmatched recorded searches"
-(ROOT / "evaluation/results-claude.json").write_text(json.dumps(declared, indent=2) + "\n")
 (OUT / "results.json").write_text(json.dumps(declared, indent=2) + "\n")
 logger.info(
     f"Verified {executed['bm_search']} actual text searches, {executed['bm_read']} reads, returned ID order, "
-    f"provenance, and unchanged corpus. Wrote results-claude.json."
+    f"provenance, and unchanged corpus. Wrote {OUT / 'results.json'}."
 )

@@ -20,7 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
 logger.info(f"Native MCP/watcher probe artifacts: {OUT}")
-assert version("basic-memory") == os.environ.get("PHASE1B_EXPECTED_VERSION", "1.0.0")
+installed_version = version("basic-memory")
+expected_version = os.environ.get("PHASE1B_EXPECTED_VERSION")
+if expected_version is None:
+    assert installed_version.partition("+")[0] == "1.0.0"
+else:
+    assert installed_version == expected_version
 installed = "--installed-semantic-disabled" in sys.argv
 semantic_disabled = installed or "--semantic-disabled" in sys.argv
 before = {

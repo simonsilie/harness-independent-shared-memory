@@ -4,8 +4,8 @@
 installed Basic Memory 1.0.0 source. With explicit owner approval, it was applied
 to the project's `.venv` on 17 November 2026 and verified there with disposable
 data; see [installation evidence and backup](../docs/model-free-operation.md#approved-local-installation).
-It has not been enabled in the external storage configuration. It is not an
-upstream release or a dependency change, and must be reapplied after a reinstall.
+The project lockfile now installs the [patched release](https://github.com/simonsilie/harness-independent-shared-memory/releases/tag/basic-memory-semantic.2)
+with its recorded SHA-256.
 
 With the patch applied, either configuration form disables the semantic stack:
 
@@ -46,21 +46,20 @@ command remain available. To enable creation for a trusted MCP server, set
 `"enable_mcp_project_create": true` in the server's `config.json` or set
 `BASIC_MEMORY_ENABLE_MCP_PROJECT_CREATE=true` in its environment and restart it.
 
-The wheel below includes both patches. Install that wheel to make the setting
-available in the runtime used by the clients.
+The locked wheel includes both patches.
 
 ## Reproducible runtime build
 
 `build/semantic_runtime.py` combines the source pin and both patches into one
-versioned wheel. It reads Basic Memory's version, wheel URL and SHA-256 from
-`uv.lock`, downloads that exact wheel, verifies the hash, applies both patches
+versioned wheel. The builder pins the original upstream version, wheel URL and
+SHA-256 independently of the patched release in `uv.lock`. It downloads the
+upstream wheel, verifies the hash, applies both patches
 with zero fuzz and repacks the result as `1.0.0+semantic.2`. The local version
 suffix identifies this patch integration; increment `BUILD_REVISION` in the build
 script when a patch changes. Wheel entries are sorted and carry fixed
 timestamps, so a rebuild is byte-identical. The hashes of the pinned wheel, both
 patches and the output are recorded in `build/dist/manifest.json`. Pass
-`--wheel <pinned wheel>` to build from a local copy offline; the hash is still
-verified against the lock.
+`--wheel <pinned wheel>` to build from a local copy offline with the same hash check.
 
 ```sh
 uv run --locked python build/semantic_runtime.py build
@@ -77,10 +76,9 @@ inference imports and zero outbound connections in both MCP processes and the
 CLI. The probe's expected version is supplied through `PHASE1B_EXPECTED_VERSION`
 because the built wheel carries the local version suffix.
 
-Neither command installs into the launcher's `.venv` or changes productive
-storage or client configuration. Deploying the wheel to the productive runtime
-is a separate, explicit step; the launcher's existing field check then accepts
-the built package without further patching.
+`build` writes the artifact to `build/dist`. `verify` checks it in a separate
+environment. To deploy a new build, publish the versioned wheel and update its
+version and source in `pyproject.toml` and `uv.lock`.
 
 ## Validation without installation
 
@@ -128,8 +126,10 @@ WATCHFILES_FORCE_POLLING=true uv run --locked --no-sync python evaluation/native
 This uses the same disposable data and guards, and verifies the actual installed
 import path in both MCP processes and the CLI. It requires the patch to be installed.
 
-The existing unpatched fallback check remains available separately:
+Run the original unpatched fallback check with an interpreter from a separate
+environment that has upstream Basic Memory 1.0.0 installed:
 
 ```sh
-WATCHFILES_FORCE_POLLING=true uv run --locked --no-sync python evaluation/native/mcp_watcher.py
+WATCHFILES_FORCE_POLLING=true PHASE1B_EXPECTED_VERSION=1.0.0 \
+  /path/to/upstream-env/bin/python evaluation/native/mcp_watcher.py
 ```
