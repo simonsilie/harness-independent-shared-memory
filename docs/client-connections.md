@@ -62,9 +62,11 @@ Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
 configuration and its exact old and new command values. Use an absolute
 executable path, an OpenCode `{env:HOME}` path, or a command on both the
 installer's and the client's `PATH`. Repeat it for any project-local overrides.
-Before changing launcher entries, the script checks each new executable and
-runs the native integration tests against disposable stores. Use `--test` to run the
-same tests when installing the gate dependencies alone. Entries that pass
+Before changing launcher entries, the script runs the native integration tests
+and starts each replacement launcher with a disposable store. The launcher must
+forward `--config` to the proxy and preserve its environment so the check can
+verify the selected store. Use `--test` to run the native integration suite when
+installing the gate dependencies alone. Entries that pass
 arguments to the native launcher need a separate edit to remove those arguments
 when switching to the proxy. Restart the clients after changing their launcher
 entries.

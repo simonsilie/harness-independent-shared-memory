@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -65,7 +66,7 @@ def store(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def proxy(store, tmp_path):
+def gate_config(store, tmp_path):
     root, executable, environment = store
     config = Config(
         native_command=[str(executable), "mcp", "--transport", "stdio"],
@@ -76,6 +77,12 @@ def proxy(store, tmp_path):
     config_path = tmp_path / "gate.json"
     config_path.write_text(config.model_dump_json())
     assert "APPROVAL_GATE_TEST_SECRET" not in json.loads(config_path.read_text())["env"]
+    return root, config, config_path
+
+
+@pytest.fixture
+def proxy(gate_config):
+    root, config, config_path = gate_config
     parameters = StdioServerParameters(
         command=sys.executable,
         args=["-m", "approval_gate.proxy", "--config", str(config_path)],
@@ -83,6 +90,45 @@ def proxy(store, tmp_path):
         env={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
     )
     return root, config, parameters
+
+
+@pytest.mark.parametrize(
+    "launcher", json.loads(os.environ.get("SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS", "[]")) or [None]
+)
+def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launcher):
+    _, config, config_path = gate_config
+    if launcher is None:
+        wrapper = tmp_path / "launcher"
+        checkout = Path(__file__).resolve().parents[2]
+        command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", str(tmp_path / "unused.json")])
+        wrapper.write_text(f'#!/bin/sh\ncd {shlex.quote(str(checkout))} && exec {command} "$@"\n')
+        wrapper.chmod(0o700)
+        launcher = str(wrapper)
+    parameters = StdioServerParameters(
+        command=launcher,
+        args=["--config", str(config_path)],
+        cwd=tmp_path,
+        env={"SHARED_MEMORY_APPROVAL_CHECK_CONFIG": str(config_path)},
+    )
+
+    async def check():
+        async with (
+            asyncio.timeout(45),
+            stdio_client(parameters) as streams,
+            ClientSession(*streams, read_timeout_seconds=30) as session,
+        ):
+            await session.initialize()
+            tools = await session.list_tools()
+            assert {tool.name for tool in tools.tools} == {"bm_project", "bm_read", "bm_search", "bm_write"}
+            note = await session.call_tool(
+                "bm_read", {"project": "personal", "identifier": "handovers/existing-durable.md"}
+            )
+            assert not note.is_error and any(
+                "Keep SQLite local." in block.text for block in note.content if hasattr(block, "text")
+            )
+
+    asyncio.run(check())
+    assert config.proposals_dir.is_dir()
 
 
 def test_durable_write_requires_owner_approval_and_then_persists(proxy):

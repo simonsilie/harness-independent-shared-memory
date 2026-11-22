@@ -219,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
         "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
     )
     args = parser.parse_args(argv)
+    expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
+    if expected and args.config.resolve() != Path(expected).resolve():
+        parser.error("Launcher did not select the disposable approval-gate configuration")
     config = load_config(args.config)
     return run_proxy(config, args.config)
 
