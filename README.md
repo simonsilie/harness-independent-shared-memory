@@ -82,8 +82,8 @@ creates a missing `basic_memory` entry or migrates an existing one to the
 launcher below, preserves foreign entries, comments and existing tool grants,
 and reports "No changes needed" when nothing would change. Existing OpenCode
 permission rules take precedence over installer defaults. The installer
-migrates local OpenCode entries. It uses only paths derived from the checkout,
-the client configuration and the gate configuration;
+migrates Codex stdio entries and local OpenCode entries. It uses only paths
+derived from the checkout, the client configuration and the gate configuration;
 it does not depend on the Toolbox repository, personal wrappers or a particular
 directory layout. Restart the affected client after applying.
 

@@ -1,6 +1,10 @@
 """Planning and idempotency checks for the approval gate installer."""
 
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -63,7 +67,10 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         executable.write_text("")
         executable.chmod(0o755)
     monkeypatch.setattr(install, "ROOT", root)
-    monkeypatch.setattr(install.shutil, "which", lambda name: "/fake/bin/uv" if name == "uv" else None)
+    which = shutil.which
+    monkeypatch.setattr(
+        install.shutil, "which", lambda name, **kwargs: "/fake/bin/uv" if name == "uv" else which(name, **kwargs)
+    )
     return root
 
 
@@ -178,18 +185,47 @@ def test_fresh_configuration_gets_a_complete_entry(client: str, checkout: Path, 
         assert len(document["permissions"]) == 5
 
 
-def test_missing_runtime_aborts_before_any_configuration_change(checkout: Path, tmp_path: Path) -> None:
-    without_runtime = tmp_path / "fresh-checkout"
-    without_runtime.mkdir()
-    monkeypatch_runtime = checkout / ".venv/bin/python"
-    monkeypatch_runtime.unlink()
-    (checkout / ".venv/bin/basic-memory").unlink()
+def test_documented_launcher_reports_missing_runtime_before_writing(tmp_path: Path) -> None:
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to verify the documented launcher")
+    root = tmp_path / "fresh-checkout"
+    package = root / "approval_gate"
+    package.mkdir(parents=True)
+    for name in ("__init__.py", "install.py", "config.py"):
+        shutil.copyfile(install.ROOT / "approval_gate" / name, package / name)
+    for name in ("pyproject.toml", "uv.lock"):
+        shutil.copyfile(install.ROOT / name, root / name)
     config = tmp_path / "config.toml"
     config.write_text(CODEX)
-    gate = gate_config(tmp_path, checkout)
+    gate = gate_config(tmp_path, root)
 
-    with pytest.raises(install.InstallError, match=r"cd .* && uv sync --locked"):
-        install.make_plan("codex", config, gate, root=without_runtime, uv="/fake/bin/uv")
+    result = subprocess.run(
+        [
+            uv,
+            "run",
+            "--locked",
+            "--no-sync",
+            "python",
+            "-m",
+            "approval_gate.install",
+            *install_args("codex", config, gate, apply=True),
+        ],
+        cwd=root,
+        env=os.environ
+        | {
+            "UV_CACHE_DIR": str(tmp_path / "uv-cache"),
+            "UV_OFFLINE": "1",
+            "UV_PROJECT_ENVIRONMENT": ".venv",
+            "UV_PYTHON": sys.executable,
+            "UV_PYTHON_DOWNLOADS": "never",
+        },
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 1
+    assert "uv sync --locked" in result.stderr
     assert config.read_text() == CODEX
 
 
@@ -336,3 +372,52 @@ def test_opencode_rejects_unsupported_migrations_without_changes(
     assert install.main(install_args("opencode", config, gate, apply=True)) == 1
     assert error in capsys.readouterr().err
     assert config.read_text() == original
+
+
+def test_codex_rejects_http_migrations_without_changes(
+    checkout: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    original = '[mcp_servers.basic_memory]\nurl = "https://example.invalid/mcp"\n'
+    config = tmp_path / "config.toml"
+    config.write_text(original)
+
+    assert install.main(install_args("codex", config, gate_config(tmp_path, checkout), apply=True)) == 1
+    assert "Only stdio Codex" in capsys.readouterr().err
+    assert config.read_text() == original
+
+
+@pytest.mark.parametrize("executable", ["./missing/basic-memory", "missing-basic-memory"])
+def test_missing_native_executable_aborts_before_writing(
+    checkout: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], executable: str
+) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text(CODEX)
+    gate = gate_config(tmp_path, checkout)
+    data = json.loads(gate.read_text())
+    data["native_command"] = [executable, "mcp"]
+    data["env"] = {"PATH": str(checkout / ".venv/bin")}
+    gate.write_text(json.dumps(data))
+
+    assert install.main(install_args("codex", config, gate, apply=True)) == 1
+    assert "Native executable" in capsys.readouterr().err
+    assert config.read_text() == CODEX
+
+
+def test_codex_keeps_comments_inside_multiline_arguments() -> None:
+    original = """[mcp_servers.basic_memory]
+command = "/native"
+args = [
+  # keep local scope
+  "mcp#argument", # keep this # entire comment
+  '''
+# part of an argument
+''',
+]
+"""
+    updated = install.plan_toml(original, "uv", ["run"])
+
+    assert tomllib.loads(updated)["mcp_servers"]["basic_memory"]["args"] == ["run"]
+    assert "# keep local scope" in updated
+    assert "# keep this # entire comment" in updated
+    assert "# part of an argument" not in updated
+    assert install.plan_toml(updated, "uv", ["run"]) == updated

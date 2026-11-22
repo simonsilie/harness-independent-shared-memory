@@ -13,8 +13,6 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from .config import load_config
-
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ("bm_project", "bm_search", "bm_read", "bm_write")
 PERMISSIONS = [
@@ -270,10 +268,32 @@ def _toml_assign(block: str, key: str, value: str | list[str]) -> str:
         start = match.end()
         for boundary in re.finditer(r"#|\n|\Z", block[start:]):
             end = start + boundary.start()
+            assignment = block[match.start() : end]
             try:
-                tomllib.loads(block[match.start() : end])
+                parsed = tomllib.loads(assignment)
             except tomllib.TOMLDecodeError:
                 continue
+            if isinstance(value, list):
+                # Removing a real comment leaves the parsed argument values unchanged.
+                comments = []
+                previous_end = 0
+                for marker in re.finditer("#", assignment):
+                    offset = marker.start()
+                    if offset < previous_end:
+                        continue
+                    line_end = assignment.find("\n", offset)
+                    line_end = len(assignment) if line_end == -1 else line_end
+                    try:
+                        without_comment = tomllib.loads(assignment[:offset] + assignment[line_end:])
+                    except tomllib.TOMLDecodeError:
+                        continue
+                    if without_comment == parsed:
+                        comments.append(assignment[offset:line_end])
+                        previous_end = line_end
+                if comments:
+                    indent = _indent(block, start)
+                    comment_lines = "".join(f"{indent}  {comment}\n" for comment in comments)
+                    rendered = f"[\n{comment_lines}{indent}  {rendered[1:-1]}\n{indent}]"
             end = start + len(block[start:end].rstrip(" \t"))
             return block[:start] + rendered + block[end:]
         raise InstallError(f"Invalid TOML value for {key!r}")
@@ -283,6 +303,15 @@ def _toml_assign(block: str, key: str, value: str | list[str]) -> str:
 
 
 def plan_toml(original: str, uv: str, arguments: list[str]) -> str:
+    try:
+        servers = tomllib.loads(original).get("mcp_servers", {})
+    except tomllib.TOMLDecodeError as error:
+        raise InstallError(f"Invalid TOML client configuration: {error}") from error
+    if isinstance(servers, dict):
+        existing = servers.get("basic_memory")
+        if isinstance(existing, dict) and "url" in existing:
+            raise InstallError("Only stdio Codex 'basic_memory' entries can be migrated")
+
     headers = re.finditer(r"(?m)^[ \t]*\[.*\][ \t]*(?:#[^\r\n]*)?$", original)
     match = None
     end = len(original)
@@ -330,10 +359,19 @@ def make_plan(
 ) -> tuple[str, str]:
     root = ROOT if root is None else root
     uv = check_runtime(root, uv)
+    from .config import load_config
+
     try:
-        load_config(gate_config)
+        config = load_config(gate_config)
     except (OSError, ValueError) as error:
         raise InstallError(f"Invalid approval gate configuration {gate_config}: {error}") from error
+    executable = config.native_command[0]
+    configured_path = (config.env or {}).get("PATH")
+    if not executable or (
+        (Path(executable).is_absolute() or configured_path is not None)
+        and shutil.which(executable, path=configured_path) is None
+    ):
+        raise InstallError(f"Native executable from {gate_config} is missing or not executable: {executable!r}")
     arguments = [
         "run",
         "--directory",
