@@ -52,53 +52,30 @@ cp approval_gate/config.example.json approval_gate/config.json
 
 Replace the placeholder paths in that file with absolute paths to your checkout
 and store. The proxy and the owner CLI share this configuration, including
-`BASIC_MEMORY_CONFIG_DIR`. Merge the server entry below into each client's
-existing configuration and replace the example paths, including the absolute
-path to `uv`. The launcher uses the environment created by `uv sync --locked`
-during setup.
+`BASIC_MEMORY_CONFIG_DIR`. The launcher uses the environment created by
+`uv sync --locked` during setup.
 
 The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
 available for `list` and `recent` while blocking project creation by default.
 Use `basic-memory project add` to add projects manually.
 
-**Codex** · `~/.codex/config.toml`
+#### Generate Codex and OpenCode snippets
 
-```toml
-[mcp_servers.basic_memory]
-command = "/path/to/uv"
-args = [
-  "run", "--directory", "/path/to/checkout", "--locked", "--no-sync",
-  "python", "-m", "approval_gate.proxy", "--config", "/path/to/checkout/approval_gate/config.json"
-]
-enabled_tools = ["bm_project", "bm_search", "bm_read", "bm_write"]
+From the checkout root, print the snippet for the client you want to configure:
+
+```sh
+uv run --locked --no-sync python -m approval_gate.snippet \
+  --client codex --config approval_gate/config.json
+
+uv run --locked --no-sync python -m approval_gate.snippet \
+  --client opencode --config approval_gate/config.json
 ```
 
-**OpenCode** · `~/.config/opencode/opencode.jsonc`
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "basic_memory": {
-        "type": "local",
-        "command": [
-          "/path/to/uv", "run", "--directory", "/path/to/checkout", "--locked", "--no-sync",
-          "python", "-m", "approval_gate.proxy",
-          "--config", "/path/to/checkout/approval_gate/config.json"
-        ],
-        "codemode": false
-      }
-    }
-  },
-  "permissions": [
-    { "action": "basic_memory_*", "resource": "*", "effect": "deny" },
-    { "action": "basic_memory_bm_project", "resource": "*", "effect": "allow" },
-    { "action": "basic_memory_bm_search", "resource": "*", "effect": "allow" },
-    { "action": "basic_memory_bm_read", "resource": "*", "effect": "allow" },
-    { "action": "basic_memory_bm_write", "resource": "*", "effect": "allow" }
-  ]
-}
-```
+Merge the Codex snippet into `~/.codex/config.toml` or the OpenCode snippet into
+`~/.config/opencode/opencode.jsonc`. If a local `basic_memory` entry already
+exists, update its `command` and, for Codex, `args`. Keep existing tool permissions.
+When adding the OpenCode defaults, put them before existing permission rules so
+the existing rules take precedence. Restart the client after saving.
 
 **Claude Code**
 

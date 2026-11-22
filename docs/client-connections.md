@@ -46,7 +46,7 @@ proposal and the note is absent while approval is pending. To restore the
 previous mode, select its launcher again and restart the client.
 
 For setups without the Toolbox gate wrapper and configuration, use the
-[checkout configuration examples](../README.md#connect-your-coding-agent).
+[checkout snippet generator](../README.md#generate-codex-and-opencode-snippets).
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).
