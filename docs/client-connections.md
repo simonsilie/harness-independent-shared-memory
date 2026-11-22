@@ -64,14 +64,15 @@ executable path, an OpenCode `{env:HOME}` path, or a command on both the
 installer's and the client's `PATH`. Repeat it for any project-local overrides.
 Before changing launcher entries, the script checks that the configured proposal
 and audit paths are usable. It starts each replacement launcher without arguments
-with a temporary `HOME` and disposable store settings, then checks that the
-launcher selects the approval-gate configuration passed to the installer. The
-replacement launcher must pass the test environment to the proxy. Native wrappers
-must honor the test store settings or derive their store paths from `HOME`, as
+with a temporary `HOME` and a disposable project, then checks that the launcher
+selects the approval-gate configuration and Python environment passed to the
+installer. The replacement launcher must pass the test environment to the proxy.
+Native wrappers must honor the test store settings or derive their store paths from `HOME`, as
 the Toolbox launcher does. Integration tests use staged dependencies and the
-candidate wheel. The installer updates the live
-environment after the tests pass. If updating a client configuration fails, it
-restores earlier launcher changes when their files still match what it wrote.
+candidate wheel. The installer updates the live environment after the tests pass
+and repeats the launcher check with the installed packages before switching.
+If updating a client configuration fails, it restores earlier launcher changes
+when their files still match what it wrote.
 Use `--test` to run the native integration suite when installing only the gate
 dependencies. Entries that pass
 arguments to the native launcher need a separate edit to remove those arguments

@@ -178,6 +178,7 @@ def main() -> int:
                 packages_to_install.append(str(candidate))
             env = {
                 "PYTHONPATH": os.pathsep.join(filter(None, (str(target), os.environ.get("PYTHONPATH")))),
+                "SHARED_MEMORY_APPROVAL_TEST_PACKAGES": str(target),
             }
             if wheel:
                 env["SHARED_MEMORY_APPROVAL_TEST_NATIVE"] = str(target / "bin/basic-memory")
@@ -198,21 +199,17 @@ def main() -> int:
                 run([str(python), "-c", "import pytest"])
             run([*install, "--target", str(target), *packages_to_install])
             run([str(python), "-m", "approval_gate.proxy", "--help"], env)
+            launcher_env = {
+                "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS": json.dumps(launchers),
+                "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": str(config),
+            }
+            native_tests = "tests/approval_gate/test_native_integration.py"
+            pytest = [str(python), "-m", "pytest", "-q"]
             if run_tests:
-                run(
-                    [str(python), "-m", "pytest", "-q", "tests/approval_gate/test_native_integration.py"],
-                    env
-                    | {
-                        "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS": json.dumps(launchers),
-                        "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": str(config),
-                    },
-                )
-            if args.dry_run:
-                run([*install, *packages_to_install])
-                return 0
+                run([*pytest, native_tests], env | launcher_env)
             staged: dict[Path, tuple[Path, Path]] = {}
             for path, (original, updated) in changes.items():
-                if original != updated:
+                if original != updated and not args.dry_run:
                     mode = S_IMODE(path.stat().st_mode)
                     files = []
                     for content in (original, updated):
@@ -228,6 +225,10 @@ def main() -> int:
                 if path.read_bytes() != original:
                     raise ValueError(f"{path}: configuration changed during installation")
             run([*install, *packages_to_install])
+            if launchers:
+                run([*pytest, f"{native_tests}::test_replacement_launcher_uses_disposable_gate"], launcher_env)
+            if args.dry_run:
+                return 0
             switched = []
             try:
                 for path, (original, _) in changes.items():

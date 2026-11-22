@@ -28,9 +28,10 @@ def store(tmp_path, monkeypatch):
     state = root / "state"
     personal = root / "notes/personal"
     alpha = root / "notes/alpha"
-    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers", alpha):
+    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers", alpha / "handovers"):
         folder.mkdir(parents=True)
     (personal / "handovers/existing-durable.md").write_text(DURABLE)
+    (alpha / "handovers/launcher-probe.md").write_text(DURABLE)
     config = {
         "projects": {
             "personal": {"path": str(personal), "mode": "local"},
@@ -116,6 +117,7 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
         "BASIC_MEMORY_DATABASE_BACKEND": "sqlite",
         "BASIC_MEMORY_DATABASE_URL": "",
         "BASIC_MEMORY_PROJECT_ROOT": "",
+        "BASIC_MEMORY_MCP_PROJECT": "alpha",
         "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
     }
     config_path.write_text(config.model_copy(update={"env": test_env}).model_dump_json())
@@ -128,6 +130,7 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
             native.write_text(
                 "#!/bin/sh\nset -eu\n"
                 'test "$APPROVAL_GATE_NATIVE_MODE" = local\n'
+                'test "$BASIC_MEMORY_MCP_PROJECT" = alpha\n'
                 'test "$1" = expected-argument\n'
                 'test -f "$HOME/SharedMemory/state/config.json"\n'
                 'export BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state"\n'
@@ -141,7 +144,11 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
                     "native_command": [str(native), "expected-argument"],
                     "proposals_dir": tmp_path / "live-approvals",
                     "audit_log": tmp_path / "live-audit.jsonl",
-                    "env": {"APPROVAL_GATE_NATIVE_MODE": "local", "BASIC_MEMORY_CONFIG_DIR": "/example/live/state"},
+                    "env": {
+                        "APPROVAL_GATE_NATIVE_MODE": "local",
+                        "BASIC_MEMORY_CONFIG_DIR": "/example/live/state",
+                        "BASIC_MEMORY_MCP_PROJECT": "example-live-project",
+                    },
                 }
             )
             Path(expected).write_text(selected.model_dump_json())
@@ -159,10 +166,11 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
         **launcher["env"],
         **test_env,
         "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": expected,
+        "SHARED_MEMORY_APPROVAL_CHECK_PREFIX": sys.prefix,
         "SHARED_MEMORY_APPROVAL_TEST_CONFIG": str(config_path),
     }
-    if "SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS" in os.environ:
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, (os.environ["PYTHONPATH"], launcher["env"].get("PYTHONPATH"))))
+    if staged_packages := os.environ.get("SHARED_MEMORY_APPROVAL_TEST_PACKAGES"):
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, (staged_packages, launcher["env"].get("PYTHONPATH"))))
     parameters = StdioServerParameters(
         command=launcher["command"],
         cwd=launcher.get("cwd", tmp_path),
@@ -178,9 +186,7 @@ def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launch
             await session.initialize()
             tools = await session.list_tools()
             assert {tool.name for tool in tools.tools} == {"bm_project", "bm_read", "bm_search", "bm_write"}
-            note = await session.call_tool(
-                "bm_read", {"project": "personal", "identifier": "handovers/existing-durable.md"}
-            )
+            note = await session.call_tool("bm_read", {"project": "alpha", "identifier": "handovers/launcher-probe.md"})
             assert not note.is_error and any(
                 "Keep SQLite local." in block.text for block in note.content if hasattr(block, "text")
             )

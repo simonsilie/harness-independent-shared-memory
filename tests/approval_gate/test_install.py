@@ -118,7 +118,7 @@ def test_opencode_launcher_requires_matching_mcp_server(tmp_path, installer):
     assert path.read_text() == original
 
 
-@pytest.mark.parametrize("failure", ["handshake", "concurrent-edit"])
+@pytest.mark.parametrize("failure", ["handshake", "concurrent-edit", "installed-handshake"])
 def test_launcher_migration_checks_every_file_before_switching(tmp_path, installer, failure):
     args, run = installer
     first, second = tmp_path / "first.toml", tmp_path / "second.toml"
@@ -136,16 +136,24 @@ def test_launcher_migration_checks_every_file_before_switching(tmp_path, install
             env = kwargs["env"]
             assert json.loads(env["SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS"]) == [{"command": launcher, "env": {}}]
             assert env["SHARED_MEMORY_APPROVAL_CHECK_CONFIG"] == str(tmp_path / "gate.json")
+            if "PYTHONPATH" not in env:
+                assert "SHARED_MEMORY_APPROVAL_TEST_NATIVE" not in env
+                assert "SHARED_MEMORY_APPROVAL_TEST_PACKAGES" not in env
+                assert failure == "installed-handshake"
+                raise subprocess.CalledProcessError(1, command)
             if failure == "handshake":
                 raise subprocess.CalledProcessError(1, command)
-            second.write_text(original + "# edited during tests\n")
+            if failure == "concurrent-edit":
+                second.write_text(original + "# edited during tests\n")
 
     run.side_effect = finish_tests
     assert install.main() == 1
     assert first.read_text() == original
     assert second.read_text() == original + ("# edited during tests\n" if failure == "concurrent-edit" else "")
-    (candidate_install,) = [call.args[0] for call in run.call_args_list if call.args[0][-1].endswith(wheel.name)]
-    assert "--target" in candidate_install
+    installs = [call.args[0] for call in run.call_args_list if call.args[0][-1].endswith(wheel.name)]
+    assert ["--target" in command for command in installs] == (
+        [True, False] if failure == "installed-handshake" else [True]
+    )
 
 
 def test_wheel_is_installed_in_live_environment_after_tests(tmp_path, installer):
@@ -204,13 +212,15 @@ def test_launcher_migration_rolls_back_after_replacement_failure(tmp_path, insta
     assert set(tmp_path.glob("tmp*")) == set()
 
 
-@pytest.mark.parametrize("matches", [False, True])
-def test_proxy_uses_selected_native_command_with_disposable_store(tmp_path, monkeypatch, matches):
+@pytest.mark.parametrize("mismatch", ["config", "environment", None])
+def test_proxy_uses_selected_native_command_with_disposable_store(tmp_path, monkeypatch, mismatch):
     expected = tmp_path / "gate.json"
     disposable = tmp_path / "disposable.json"
-    selected = expected if matches else tmp_path / "different.json"
+    selected = tmp_path / "different.json" if mismatch == "config" else expected
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_CONFIG", str(selected))
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_CHECK_CONFIG", str(expected))
+    prefix = str(tmp_path / "other-venv") if mismatch == "environment" else sys.prefix
+    monkeypatch.setenv("SHARED_MEMORY_APPROVAL_CHECK_PREFIX", prefix)
     monkeypatch.setenv("SHARED_MEMORY_APPROVAL_TEST_CONFIG", str(disposable))
     configured = Config(
         native_command=["configured", "argument"],
@@ -230,7 +240,7 @@ def test_proxy_uses_selected_native_command_with_disposable_store(tmp_path, monk
     run_proxy = Mock(return_value=0)
     monkeypatch.setattr(proxy, "run_proxy", run_proxy)
 
-    if matches:
+    if mismatch is None:
         assert proxy.main([]) == 0
         active, active_path = run_proxy.call_args.args
         assert active_path == disposable

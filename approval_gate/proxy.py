@@ -226,6 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         not expected or not disposable or config_path.resolve() != Path(expected).resolve()
     ):
         parser.error("Launcher did not select the requested approval-gate configuration")
+    target_prefix = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_PREFIX")
+    if disposable and target_prefix and Path(sys.prefix).resolve() != Path(target_prefix).resolve():
+        parser.error("Launcher did not use the Python environment selected for installation")
     config = load_config(config_path)
     if disposable:
         config_path = Path(disposable)
