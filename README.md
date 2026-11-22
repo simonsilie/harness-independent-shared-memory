@@ -39,8 +39,23 @@ project. The script stops if the store already exists.
 
 ### Connect your coding agent
 
-Merge the server entry into each client's existing configuration. Replace the
-example paths with absolute paths to your checkout and store.
+The [approval gate](docs/adr/0013-technical-approval-for-durable-writes.md) is
+optional. It guards against unintended durable writes through MCP by requiring
+the owner to review and confirm each proposal in a terminal. A direct Basic
+Memory connection keeps approval in chat for a simpler workflow.
+
+To set up the gate, copy the configuration template from the repository root.
+
+```sh
+cp approval_gate/config.example.json approval_gate/config.json
+```
+
+Replace the placeholder paths in that file with absolute paths to your checkout
+and store. The proxy and the owner CLI share this configuration, including
+`BASIC_MEMORY_CONFIG_DIR`. Merge the server entry below into each client's
+existing configuration and replace the example paths, including the absolute
+path to `uv`. The launcher uses the environment created by `uv sync --locked`
+during setup.
 
 The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
 available for `list` and `recent` while blocking project creation by default.
@@ -50,15 +65,12 @@ Use `basic-memory project add` to add projects manually.
 
 ```toml
 [mcp_servers.basic_memory]
-command = "/path/to/checkout/.venv/bin/basic-memory"
-args = ["mcp", "--transport", "stdio"]
+command = "/path/to/uv"
+args = [
+  "run", "--directory", "/path/to/checkout", "--locked", "--no-sync",
+  "python", "-m", "approval_gate.proxy", "--config", "/path/to/checkout/approval_gate/config.json"
+]
 enabled_tools = ["bm_project", "bm_search", "bm_read", "bm_write"]
-
-[mcp_servers.basic_memory.env]
-BASIC_MEMORY_CONFIG_DIR = "/path/to/SharedMemory/state"
-BASIC_MEMORY_FORCE_LOCAL = "true"
-FASTMCP_CHECK_FOR_UPDATES = "off"
-WATCHFILES_FORCE_POLLING = "true"
 ```
 
 **OpenCode** · `~/.config/opencode/opencode.jsonc`
@@ -69,14 +81,12 @@ WATCHFILES_FORCE_POLLING = "true"
     "servers": {
       "basic_memory": {
         "type": "local",
-        "command": ["/path/to/checkout/.venv/bin/basic-memory", "mcp", "--transport", "stdio"],
-        "codemode": false,
-        "environment": {
-          "BASIC_MEMORY_CONFIG_DIR": "/path/to/SharedMemory/state",
-          "BASIC_MEMORY_FORCE_LOCAL": "true",
-          "FASTMCP_CHECK_FOR_UPDATES": "off",
-          "WATCHFILES_FORCE_POLLING": "true"
-        }
+        "command": [
+          "/path/to/uv", "run", "--directory", "/path/to/checkout", "--locked", "--no-sync",
+          "python", "-m", "approval_gate.proxy",
+          "--config", "/path/to/checkout/approval_gate/config.json"
+        ],
+        "codemode": false
       }
     }
   },
@@ -92,13 +102,14 @@ WATCHFILES_FORCE_POLLING = "true"
 
 **Claude Code**
 
-Register the server in user scope so you can use it across repositories.
+Register the server in user scope so you can use it across repositories. To
+replace an existing user-scope `basic_memory` entry, remove it first with
+`claude mcp remove --scope user basic_memory`.
 
 ```sh
 claude mcp add --scope user --transport stdio basic_memory \
-  --env BASIC_MEMORY_CONFIG_DIR="/path/to/SharedMemory/state" \
-    BASIC_MEMORY_FORCE_LOCAL=true FASTMCP_CHECK_FOR_UPDATES=off WATCHFILES_FORCE_POLLING=true \
-  -- "/path/to/checkout/.venv/bin/basic-memory" mcp --transport stdio
+  -- "/path/to/uv" run --directory "/path/to/checkout" --locked --no-sync \
+    python -m approval_gate.proxy --config "/path/to/checkout/approval_gate/config.json"
 ```
 
 To match the tool set above, merge these rules into `~/.claude/settings.json`.
@@ -122,9 +133,15 @@ Keep existing rules and check the effective tool list after updating Basic Memor
 }
 ```
 
-Start fresh sessions and check that each configured client lists `personal` and `example`
-with `bm_project`. To try cross-client recall, approve a short test note in
-`example` in one client and ask another to find it. For daily use, give your
-clients the same instructions for project-scoped recall, explicit approval of
-durable notes, checksum-protected updates and temporary handovers. The approval
-rule is a client workflow convention.
+Start fresh sessions and check that each configured client lists `personal` and
+`example` with `bm_project`. Ask one client to propose a short durable test note
+in `example`. Run the command returned with the proposal in your own terminal,
+review the note and confirm it there. Then ask another client to find it. For
+daily use, give clients the same instructions for project-scoped recall,
+presenting durable-write proposals, checksum-protected updates and temporary
+handovers.
+
+To connect directly, use the template's `native_command` and `env` as the
+client command and environment and keep the same client tool permissions.
+Existing Toolbox setups can follow the
+[launcher migration instructions](docs/client-connections.md#configuration-and-ownership).

@@ -54,14 +54,14 @@ Run these steps from the memory project root. The runner supplies `evaluation/cl
 
    The runner first repeats the blocking preflight and requires exactly `bm_search` and `bm_read` before sending the questions, so an unexpected tool stops the run without a model request. The preflight inventory is saved to `effective-tools.json` and traced to `preflight-events.jsonl`; the questions go to a separate session using `client-settings.json` without the hook, whose own `init` event is checked again. The prompt matches the Codex prompt and contains the contents of `evaluation/questions.json`; neither `evaluation/recall/prepare.py` nor the answer key is supplied or indexed. The model is the account default. Raw stream events, including every tool call and result, are retained in `events.jsonl`. This is workflow isolation under a trusted owner, not an OS confidentiality boundary.
 
-5. Verify the response against actual tool calls, then score it. Replace `RUN_DIRECTORY` with the directory printed by the runner:
+5. Set `RUN_DIRECTORY` to the directory printed by the runner, then verify and score that run.
 
    ```sh
-   uv run --locked python evaluation/claude/verify.py RUN_DIRECTORY
-   uv run --locked python -m evaluation.recall.score evaluation/results-claude.json
+   uv run --locked python evaluation/claude/verify.py "$RUN_DIRECTORY" &&
+     uv run --locked python -m evaluation.recall.score "$RUN_DIRECTORY/results.json"
    ```
 
-   Verification checks the inventory, that only the two allowed tools ran without errors or permission denials, all 22 actual search modes, returned ID order including irrelevant hits, source revisions of notes read, and unchanged corpus bytes. It writes `evaluation/results-claude.json` and keeps `results.json` and `tool-calls.json` in the run directory.
+   Verification checks the inventory, that only the two allowed tools ran without errors or permission denials, all 22 actual search modes, returned ID order including irrelevant hits, source revisions of notes read, and unchanged corpus bytes. It writes `results.json` and `tool-calls.json` in the run directory.
 
 6. Test startup retrieval without a memory reminder, and startup outage behaviour:
 

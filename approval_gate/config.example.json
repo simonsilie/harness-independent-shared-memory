@@ -8,5 +8,10 @@
   "proposals_dir": "/absolute/path/to/SharedMemory/approvals",
   "audit_log": "/absolute/path/to/SharedMemory/approval-audit.jsonl",
   "ttl_hours": 24,
-  "env": {}
+  "env": {
+    "BASIC_MEMORY_CONFIG_DIR": "/absolute/path/to/SharedMemory/state",
+    "BASIC_MEMORY_FORCE_LOCAL": "true",
+    "FASTMCP_CHECK_FOR_UPDATES": "off",
+    "WATCHFILES_FORCE_POLLING": "true"
+  }
 }

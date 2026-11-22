@@ -58,14 +58,14 @@ Run these steps from the memory project root. The runner loads `evaluation/openc
 
    Each run verifies inventory as above, then continues the same fresh session through `opencode run` against that private server with the model pinned to `opencode-go/glm-5.3-flash`; the service default resolved to an OpenRouter model whose credits were exhausted, and the failed first attempts are retained in the runs directory. The prompt contains only the contents of `evaluation/questions.json`; the evaluation instructions live in the agent definition and are recorded in the run evidence. Neither `evaluation/recall/prepare.py` nor the answer key is supplied or indexed. The client chooses one keyword query per question, explicitly passes `mode="text"`, `page_size=5`, `output_format="json"`, and `project="main"`, and reads returned notes when it decides evidence must be inspected. Raw client events, tool arguments, results, and timestamps are retained. The plugin stops requests if session identity cannot be resolved or evidence cannot be recorded. Unlike Codex, the evaluated session runs in the real checkout; file, shell, web, and other tools are denied, so it cannot read local materials. OpenCode's session records live in the shared service data directory outside the project; the raw evidence copies are project-local.
 
-5. Verify the response against actual tool calls, then score it after the client exits. Replace `RUN_DIRECTORY` with the directory printed by the runner:
+5. After the client exits, set `RUN_DIRECTORY` to the directory printed by the runner, then verify and score that run.
 
    ```sh
-   uv run --locked python evaluation/opencode/verify.py RUN_DIRECTORY
-   uv run --locked python -m evaluation.recall.score evaluation/results-opencode.json
+   uv run --locked python evaluation/opencode/verify.py "$RUN_DIRECTORY" &&
+     uv run --locked python -m evaluation.recall.score "$RUN_DIRECTORY/results.json"
    ```
 
-   Verification checks the effective tool inventory from the live session snapshot, all 22 actual search modes, returned ID order including irrelevant hits, source revisions for notes actually read, unchanged corpus bytes, and that the declared results match the actual calls query by query. Search permalinks are mapped against local corpus metadata; that alone does not verify the source revision served by the engine. `verification-summary.json` lists returned note IDs lacking read-based source-revision verification, separately from the recall score. It writes `results-opencode.json`, plus `results.json` and `tool-calls.json` in that run directory. Each invocation gets a separate timestamped directory so reruns preserve earlier evidence.
+   Verification checks the effective tool inventory from the live session snapshot, all 22 actual search modes, returned ID order including irrelevant hits, source revisions for notes actually read, unchanged corpus bytes, and that the declared results match the actual calls query by query. Search permalinks are mapped against local corpus metadata; that alone does not verify the source revision served by the engine. `verification-summary.json` lists returned note IDs lacking read-based source-revision verification, separately from the recall score. The verifier writes the summary, `results.json` and `tool-calls.json` in that run directory. Each invocation gets a separate timestamped directory so reruns preserve earlier evidence.
 
 6. Test startup retrieval without a memory reminder:
 

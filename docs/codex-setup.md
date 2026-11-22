@@ -50,14 +50,14 @@ Run these steps from the memory project root. The evaluation runner explicitly l
 
    This repeats the inventory check before starting a model turn. The client receives the contents of `evaluation/questions.json` in a fresh thread rooted in an empty evaluation workspace, with shell, web, browser, apps, hooks, and delegation disabled. Neither `evaluation/recall/prepare.py` nor the answer key is supplied or indexed. The client chooses one keyword query per question, explicitly passes `mode="text"`, requests five results, and reads returned notes to check evidence. Raw requests, responses, and timestamps are retained in `events.jsonl`. This is workflow isolation under a trusted owner, not an OS confidentiality boundary.
 
-5. Verify the response against actual tool calls, then score it after the client exits. Replace `RUN_DIRECTORY` with the directory printed by the runner:
+5. After the client exits, set `RUN_DIRECTORY` to the directory printed by the runner, then verify and score that run.
 
    ```sh
-   uv run --locked python evaluation/codex/verify.py RUN_DIRECTORY
-   uv run --locked python -m evaluation.recall.score evaluation/results-codex.json
+   uv run --locked python evaluation/codex/verify.py "$RUN_DIRECTORY" &&
+     uv run --locked python -m evaluation.recall.score "$RUN_DIRECTORY/results.json"
    ```
 
-   Verification checks all 22 actual search modes, returned ID order including irrelevant hits, read provenance, the effective tool inventory, and unchanged corpus bytes. It writes `results-codex.json`, plus `results.json` and `tool-calls.json` in that run directory. Each invocation gets a separate timestamped directory so reruns preserve earlier evidence. Codex may need permission to start outside a restrictive process sandbox and to use its existing model-provider login; the evaluated thread remains read-only.
+   Verification checks all 22 actual search modes, returned ID order including irrelevant hits, read provenance, the effective tool inventory, and unchanged corpus bytes. It writes `results.json` and `tool-calls.json` in that run directory. Each invocation gets a separate timestamped directory so reruns preserve earlier evidence. Codex may need permission to start outside a restrictive process sandbox and to use its existing model-provider login; the evaluated thread remains read-only.
 
 Recorded recall, startup, outage, recovery, and compatibility checks are documented in [evaluation results](evaluation-results.md).
 

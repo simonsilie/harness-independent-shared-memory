@@ -69,9 +69,9 @@ for result in results:
     assert isinstance(result["recognized_missing_evidence"], bool)
 assert not any(searches.values())
 assert json.loads((OUT / "corpus-before.json").read_text()) == json.loads((OUT / "corpus-after.json").read_text())
-(ROOT / "evaluation/results-codex.json").write_text(json.dumps(results, indent=2) + "\n")
 (OUT / "results.json").write_text(json.dumps(results, indent=2) + "\n")
 (OUT / "tool-calls.json").write_text(json.dumps(calls, indent=2) + "\n")
 logger.info(
-    f"Verified 22 actual text searches, {len(calls) - 22} reads, returned ID order, provenance, and unchanged corpus. Wrote results-codex.json."
+    f"Verified 22 actual text searches, {len(calls) - 22} reads, returned ID order, provenance, and unchanged corpus. "
+    f"Wrote {OUT / 'results.json'}."
 )

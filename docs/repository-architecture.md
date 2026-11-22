@@ -9,6 +9,7 @@ to historical plans and evidence.
 ```text
 ops/                         native backup, restore and portable export
 build/semantic_runtime.py    pinned model-free runtime build and verification
+approval_gate/               stdio MCP proxy and owner approval CLI
 evaluation/
   bm                         experiment-only Basic Memory launcher
   corpus/                    reviewed experiment notes
@@ -23,16 +24,18 @@ evaluation/
   evidence/                  evidence collection
   observations.md            historical everyday-use observation log
 tests/
+  approval_gate/             proposal, proxy and native approval tests
   ops/                       recovery and portable-export integration tests
   evaluation/                harness unit and integration tests
 patches/                     patches for the pinned Basic Memory dependency
 docs/                        setup, architecture, ADRs and recorded evidence
 ```
 
-Run commands from the repository root with uv:
+Run commands from the repository root with uv. For scoring, set
+`RUN_DIRECTORY` to a verified recall run.
 
 ```sh
-uv run --locked python -m evaluation.recall.score evaluation/results-codex.json
+uv run --locked python -m evaluation.recall.score "$RUN_DIRECTORY/results.json"
 uv run --locked python -m evaluation.opencode.run --verify-only
 uv run --locked memory-ops --help
 WATCHFILES_FORCE_POLLING=true uv run --locked python evaluation/native/mcp_watcher.py --semantic-disabled
@@ -76,11 +79,17 @@ Keep raw-evidence verification separate from scoring.
 
 ## Native runtime and verification
 
-Productive clients connect directly to Basic Memory with shared instructions,
-not through a repository-owned facade or reviewer. `ops/` implements the native
-backup/restore and OKF export procedures. `build/semantic_runtime.py` builds the
-pinned semantic-disable patch and invokes `evaluation/native/mcp_watcher.py` to
-verify the resulting runtime.
+The [quickstart](../README.md#connect-your-coding-agent) shows how to enable the
+optional `approval_gate.proxy`, which starts the native Basic Memory server.
+The proxy forwards reads and eligible temporary writes. For a durable write it
+returns a proposal that the owner reviews and confirms with `approval_gate.cli`.
+Direct connections use chat approval. See
+[ADR 0013](adr/0013-technical-approval-for-durable-writes.md) for the write
+policy and the rollout decision.
+
+`ops/` and the evaluation harnesses use the native runtime. `ops/` implements
+backup, restore and OKF export. `build/semantic_runtime.py` builds the patched
+wheel and invokes `evaluation/native/mcp_watcher.py` to verify it.
 
 `evaluation/native/mcp_server_guard.py` blocks inference imports and outbound
 Python sockets in disposable child processes. The MCP/watcher probe checks
