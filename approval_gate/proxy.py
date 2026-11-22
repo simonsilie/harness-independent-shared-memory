@@ -219,28 +219,8 @@ def main(argv: list[str] | None = None) -> int:
         "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
     )
     args = parser.parse_args(argv)
-    config_path = args.config
-    expected = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
-    disposable = os.environ.get("SHARED_MEMORY_APPROVAL_TEST_CONFIG")
-    if (expected or disposable) and (
-        not expected or not disposable or config_path.resolve() != Path(expected).resolve()
-    ):
-        parser.error("Launcher did not select the requested approval-gate configuration")
-    target_prefix = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_PREFIX")
-    if disposable and target_prefix and Path(sys.prefix).resolve() != Path(target_prefix).resolve():
-        parser.error("Launcher did not use the Python environment selected for installation")
-    config = load_config(config_path)
-    if disposable:
-        config_path = Path(disposable)
-        test_config = load_config(config_path)
-        config = config.model_copy(
-            update={
-                "env": (config.env or {}) | (test_config.env or {}),
-                "proposals_dir": test_config.proposals_dir,
-                "audit_log": test_config.audit_log,
-            }
-        )
-    return run_proxy(config, config_path)
+    config = load_config(args.config)
+    return run_proxy(config, args.config)
 
 
 if __name__ == "__main__":

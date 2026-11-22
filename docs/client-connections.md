@@ -1,8 +1,7 @@
 # Productive Codex and OpenCode connections
 
-Both clients use the native Basic Memory service and the external store at
-`$HOME/SharedMemory`. The historical corpus remains separate. No workflow facade,
-reviewer identity or new software dependency was introduced.
+The client launchers use the native Basic Memory service and the external store
+at `$HOME/SharedMemory`. The historical corpus remains separate.
 
 ## Configuration and ownership
 
@@ -21,70 +20,41 @@ The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
 refuses an unpatched runtime before native startup. It forces local routing,
 semantic search off, automatic updates and Logfire off, polling-based file
 watching and private file permissions. Moving the checkout requires adjusting
-the launcher. Rebuild the environment with `uv sync --locked` to install the
-patched wheel from the lockfile.
+the launcher. Run `uv sync --locked` from the root of this shared-memory
+repository to install the patched runtime and gate dependencies.
 
-The Toolbox also provides `bin/shared-memory-approval-gate` and
-`dotfiles/shared-memory/approval-gate.json` for the
+Toolbox checkouts with `bin/shared-memory-approval-gate` and
+`dotfiles/shared-memory/approval-gate.json` can use the
 [durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
 The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server. From the checkout, run
-`.venv/bin/python approval_gate/install.py --config /path/to/approval-gate.json`.
-The script reads the gate's dependency pins from `uv.lock` and
-targets an existing Basic Memory environment. Pass `--wheel` to test and install
-a prebuilt patched wheel in the same step. Otherwise, the installed Basic Memory
-version stays in place.
+native server. From the same shared-memory checkout, verify the proxy against
+disposable stores with
+`uv run --locked --no-sync pytest -m integration tests/approval_gate`.
 
-Pass the approval-gate configuration directly with `--config`. For Toolbox,
-this is its `dotfiles/shared-memory/approval-gate.json`. With a client that
-accepts MCP arguments and environment variables, you can also run the proxy
-directly. Set `PYTHONPATH` to the checkout, use the environment's Python as the
-command, and pass `-m approval_gate.proxy --config /path/to/approval-gate.json`
-as arguments.
+Check the effective server entry, including any project-local override, to see
+which launcher a client will use.
 
-To preview a deployment that switches existing launcher entries, substitute
-the paths and current command values below:
+With explicit owner approval, select the launcher in each client's
+`basic_memory` server entry. Use `bin/shared-memory-approval-gate` for terminal
+approval or `bin/shared-memory-mcp` for chat approval. Supply the absolute Toolbox
+path in Codex and use the existing `{env:HOME}` substitution in OpenCode. The
+Toolbox wrappers take no MCP arguments from the client. Preserve the client tool
+permissions and restart each affected client. Check that `bm_project` with
+`command="list"` returns the expected projects. To verify the gate, propose a
+synthetic durable note in a disposable project. Check that the client receives a
+proposal and the note is absent while approval is pending. To restore the
+previous mode, select its launcher again and restart the client.
 
-```sh
-checkout=/path/to/shared-memory-checkout
-"$checkout/.venv/bin/python" "$checkout/approval_gate/install.py" \
-  --python "$checkout/.venv/bin/python" \
-  --config /path/to/approval-gate.json \
-  --wheel /path/to/basic_memory-1.0.0+semantic.2-py3-none-any.whl \
-  --replace-launcher /path/to/codex/config.toml \
-    /path/to/shared-memory-mcp /path/to/shared-memory-approval-gate \
-  --replace-launcher /path/to/opencode/opencode.jsonc \
-    /path/to/shared-memory-mcp /path/to/shared-memory-approval-gate \
-  --dry-run
-```
-
-Remove `--dry-run` to apply it. Each `--replace-launcher` names an existing
-configuration and its exact old and new command values. Use an absolute
-executable path, an OpenCode `{env:HOME}` path, or a command on both the
-installer's and the client's `PATH`. Repeat it for any project-local overrides.
-Before changing launcher entries, the script checks that the configured proposal
-and audit paths are usable. It starts each replacement launcher without arguments
-with a temporary `HOME` and a disposable project, then checks that the launcher
-selects the approval-gate configuration and Python environment passed to the
-installer. The replacement launcher must pass the test environment to the proxy.
-Native wrappers must honor the test store settings or derive their store paths from `HOME`, as
-the Toolbox launcher does. Integration tests use staged dependencies and the
-candidate wheel. The installer updates the live environment after the tests pass
-and repeats the launcher check with the installed packages before switching.
-If updating a client configuration fails, it restores earlier launcher changes
-when their files still match what it wrote.
-Use `--test` to run the native integration suite when installing only the gate
-dependencies. Entries that pass
-arguments to the native launcher need a separate edit to remove those arguments
-when switching to the proxy. Restart the clients after changing their launcher
-entries.
+For setups without the Toolbox gate wrapper and configuration, use the
+[checkout configuration examples](../README.md#connect-your-coding-agent).
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).
 Codex receives the resolved absolute launcher path. Its server is optional
 (`required=false`) so memory startup failure does not block other work; tool
 approval mode remains `approve`, preserving the existing client behavior.
-Durable-write approval is the explicit chat convention described below.
+Direct connections apply the chat convention described below. Connections through
+the gate require terminal approval for durable writes.
 
 Both clients expose exactly these Basic Memory tools for ordinary sessions:
 `bm_project`, `bm_search`, `bm_read`, `bm_write`. Native checksum-conditional
@@ -101,7 +71,7 @@ text recall at startup and as new topics arise, explicit active scopes, reading
 relevant hits, sources and conflict reporting, and visible nonblocking outages.
 Durable findings and preferences require presenting concrete content and receiving
 explicit owner approval before saving. Temporary saves need no individual approval.
-These are workflow instructions, not a technical approval or access-control boundary.
+The gate enforces terminal approval on its MCP write path.
 Seven-day inactivity and archive rules are caller responsibilities. The
 [verified lifecycle addition](temporary-context.md) is now activated in the
 shared AGENTS file.

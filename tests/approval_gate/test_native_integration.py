@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -28,10 +27,9 @@ def store(tmp_path, monkeypatch):
     state = root / "state"
     personal = root / "notes/personal"
     alpha = root / "notes/alpha"
-    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers", alpha / "handovers"):
+    for folder in (state, personal / "durable", personal / "temporary", personal / "handovers", alpha):
         folder.mkdir(parents=True)
     (personal / "handovers/existing-durable.md").write_text(DURABLE)
-    (alpha / "handovers/launcher-probe.md").write_text(DURABLE)
     config = {
         "projects": {
             "personal": {"path": str(personal), "mode": "local"},
@@ -55,11 +53,7 @@ def store(tmp_path, monkeypatch):
         "FASTMCP_CHECK_FOR_UPDATES": "off",
         "HF_HUB_OFFLINE": "1",
     }
-    executable = Path(
-        os.environ.get("SHARED_MEMORY_APPROVAL_TEST_NATIVE", Path(sys.executable).with_name("basic-memory"))
-    )
-    if "SHARED_MEMORY_APPROVAL_TEST_NATIVE" in os.environ:
-        env["PYTHONPATH"] = os.environ["PYTHONPATH"]
+    executable = Path(sys.executable).with_name("basic-memory")
     subprocess.run(
         [str(executable), "reindex", "--full", "--search"],
         env=get_default_environment() | env,
@@ -71,7 +65,7 @@ def store(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def gate_config(store, tmp_path):
+def proxy(store, tmp_path):
     root, executable, environment = store
     config = Config(
         native_command=[str(executable), "mcp", "--transport", "stdio"],
@@ -82,12 +76,6 @@ def gate_config(store, tmp_path):
     config_path = tmp_path / "gate.json"
     config_path.write_text(config.model_dump_json())
     assert "APPROVAL_GATE_TEST_SECRET" not in json.loads(config_path.read_text())["env"]
-    return root, config, config_path
-
-
-@pytest.fixture
-def proxy(gate_config):
-    root, config, config_path = gate_config
     parameters = StdioServerParameters(
         command=sys.executable,
         args=["-m", "approval_gate.proxy", "--config", str(config_path)],
@@ -95,108 +83,6 @@ def proxy(gate_config):
         env={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
     )
     return root, config, parameters
-
-
-@pytest.mark.parametrize(
-    "launcher", json.loads(os.environ.get("SHARED_MEMORY_APPROVAL_TEST_LAUNCHERS", "[]")) or [None]
-)
-def test_replacement_launcher_uses_disposable_gate(gate_config, tmp_path, launcher):
-    root, config, config_path = gate_config
-    home = tmp_path / "home"
-    home.mkdir()
-    (home / "SharedMemory").symlink_to(root, target_is_directory=True)
-    projects = home / "Projects"
-    projects.mkdir()
-    checkout = Path(__file__).resolve().parents[2]
-    (projects / "harness-independent-shared-memory").symlink_to(checkout, target_is_directory=True)
-    test_env = {
-        **(config.env or {}),
-        "HOME": str(home),
-        "BASIC_MEMORY_CLOUD_MODE": "false",
-        "BASIC_MEMORY_FORCE_CLOUD": "false",
-        "BASIC_MEMORY_DATABASE_BACKEND": "sqlite",
-        "BASIC_MEMORY_DATABASE_URL": "",
-        "BASIC_MEMORY_PROJECT_ROOT": "",
-        "BASIC_MEMORY_MCP_PROJECT": "alpha",
-        "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
-    }
-    config_path.write_text(config.model_copy(update={"env": test_env}).model_dump_json())
-    selected_path = os.environ.get("SHARED_MEMORY_APPROVAL_CHECK_CONFIG")
-    expected = selected_path or str(tmp_path / "launcher-config.json")
-    if launcher is None:
-        wrapper = tmp_path / "launcher"
-        if selected_path is None:
-            native = tmp_path / "native"
-            native.write_text(
-                "#!/bin/sh\nset -eu\n"
-                'test "$APPROVAL_GATE_NATIVE_MODE" = local\n'
-                'test "$BASIC_MEMORY_MCP_PROJECT" = alpha\n'
-                'test "$1" = expected-argument\n'
-                'test -f "$HOME/SharedMemory/state/config.json"\n'
-                'export BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state"\n'
-                ': > "$HOME/native-started"\n'
-                "shift\n"
-                f'exec {shlex.join(config.native_command)} "$@"\n'
-            )
-            native.chmod(0o700)
-            selected = config.model_copy(
-                update={
-                    "native_command": [str(native), "expected-argument"],
-                    "proposals_dir": tmp_path / "live-approvals",
-                    "audit_log": tmp_path / "live-audit.jsonl",
-                    "env": {
-                        "APPROVAL_GATE_NATIVE_MODE": "local",
-                        "BASIC_MEMORY_CONFIG_DIR": "/example/live/state",
-                        "BASIC_MEMORY_MCP_PROJECT": "example-live-project",
-                    },
-                }
-            )
-            Path(expected).write_text(selected.model_dump_json())
-        command = shlex.join([sys.executable, "-m", "approval_gate.proxy", "--config", expected])
-        wrapper.write_text(
-            "#!/bin/sh\nset -eu\n"
-            'test -f "$HOME/SharedMemory/state/config.json"\n'
-            f'test "$BASIC_MEMORY_CONFIG_DIR" = {shlex.quote(str(root / "state"))}\n'
-            ': > "$HOME/launcher-started"\n'
-            f'cd {shlex.quote(str(checkout))} && exec {command} "$@"\n'
-        )
-        wrapper.chmod(0o700)
-        launcher = {"command": str(wrapper), "env": {}}
-    env = {
-        **launcher["env"],
-        **test_env,
-        "SHARED_MEMORY_APPROVAL_CHECK_CONFIG": expected,
-        "SHARED_MEMORY_APPROVAL_CHECK_PREFIX": sys.prefix,
-        "SHARED_MEMORY_APPROVAL_TEST_CONFIG": str(config_path),
-    }
-    if staged_packages := os.environ.get("SHARED_MEMORY_APPROVAL_TEST_PACKAGES"):
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, (staged_packages, launcher["env"].get("PYTHONPATH"))))
-    parameters = StdioServerParameters(
-        command=launcher["command"],
-        cwd=launcher.get("cwd", tmp_path),
-        env=env,
-    )
-
-    async def check():
-        async with (
-            asyncio.timeout(45),
-            stdio_client(parameters) as streams,
-            ClientSession(*streams, read_timeout_seconds=30) as session,
-        ):
-            await session.initialize()
-            tools = await session.list_tools()
-            assert {tool.name for tool in tools.tools} == {"bm_project", "bm_read", "bm_search", "bm_write"}
-            note = await session.call_tool("bm_read", {"project": "alpha", "identifier": "handovers/launcher-probe.md"})
-            assert not note.is_error and any(
-                "Keep SQLite local." in block.text for block in note.content if hasattr(block, "text")
-            )
-
-    asyncio.run(check())
-    assert config.proposals_dir.is_dir()
-    if selected_path is None:
-        assert (home / "launcher-started").is_file()
-        assert (home / "native-started").is_file()
-        assert not (tmp_path / "live-approvals").exists()
 
 
 def test_durable_write_requires_owner_approval_and_then_persists(proxy):

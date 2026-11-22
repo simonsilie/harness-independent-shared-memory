@@ -134,14 +134,14 @@ Keep existing rules and check the effective tool list after updating Basic Memor
 ```
 
 Start fresh sessions and check that each configured client lists `personal` and
-`example` with `bm_project`. Ask one client to propose a short durable test note
-in `example`. Run the command returned with the proposal in your own terminal,
-review the note and confirm it there. Then ask another client to find it. For
-daily use, give clients the same instructions for project-scoped recall,
-presenting durable-write proposals, checksum-protected updates and temporary
-handovers.
+`example` with `bm_project`. With the gate enabled, ask one client to propose a
+short durable test note in `example`. Run the command returned with the proposal
+in your own terminal, review the note and confirm it there. Then ask another
+client to find it. For daily use, give clients the same instructions for
+project-scoped recall, presenting durable-write proposals, checksum-protected
+updates and temporary handovers.
 
 To connect directly, use the template's `native_command` and `env` as the
 client command and environment and keep the same client tool permissions.
-Existing Toolbox setups can follow the
-[launcher migration instructions](docs/client-connections.md#configuration-and-ownership).
+For Toolbox setups, see
+[how to select the launcher](docs/client-connections.md#configuration-and-ownership).
