@@ -21,19 +21,27 @@ def main(argv: list[str] | None = None) -> int:
     if uv is None:
         parser.error("uv was not found on PATH")
     command = str(Path(uv).absolute())
+    checkout = str(ROOT)
+    config = str(args.config.expanduser().resolve())
     arguments = [
         "run",
         "--directory",
-        str(ROOT),
+        checkout,
         "--locked",
         "--no-sync",
         "python",
         "-m",
         "approval_gate.proxy",
         "--config",
-        str(args.config.expanduser().resolve()),
+        config,
     ]
     if args.client == "codex":
+        for label, path in (("uv executable", command), ("checkout", checkout), ("gate configuration", config)):
+            if any(ord(character) > 0xFFFF for character in path):
+                parser.error(
+                    f"the {label} path contains a character outside the Basic Multilingual Plane; "
+                    "use a path without emoji or other characters above U+FFFF for the Codex snippet"
+                )
         snippet = "\n".join(
             (
                 "[mcp_servers.basic_memory]",

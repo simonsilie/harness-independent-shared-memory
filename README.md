@@ -71,9 +71,13 @@ uv run --locked --no-sync python -m approval_gate.snippet \
   --client opencode --config approval_gate/config.json
 ```
 
+For Codex snippets, use paths without emoji or other characters above U+FFFF
+for `uv`, the checkout, and the gate configuration file.
+
 Merge the Codex snippet into `~/.codex/config.toml` or the OpenCode snippet into
 `~/.config/opencode/opencode.jsonc`. If a local `basic_memory` entry already
-exists, update its `command` and, for Codex, `args`. Keep existing tool permissions.
+exists, update `command` and `args` for Codex, or `command` and `codemode`
+(`false`) for OpenCode. Keep existing tool permissions.
 When adding the OpenCode defaults, put them before existing permission rules so
 the existing rules take precedence. Restart the client after saving.
 

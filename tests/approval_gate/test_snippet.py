@@ -48,3 +48,18 @@ def test_snippet_prints_launcher_and_tool_permissions(
         assert {(rule["action"], rule["resource"], rule["effect"]) for rule in allow} == {
             (f"basic_memory_{tool}", "*", "allow") for tool in TOOLS
         }
+
+
+def test_codex_snippet_rejects_emoji_in_config_path(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(snippet.shutil, "which", lambda _: "/example/bin/uv")
+
+    with pytest.raises(SystemExit) as error:
+        snippet.main(["--client", "codex", "--config", "/example/📁/gate.json"])
+
+    output = capsys.readouterr()
+    assert error.value.code == 2
+    assert not output.out
+    assert "gate configuration path contains a character outside" in output.err
+    assert "use a path without emoji" in output.err
