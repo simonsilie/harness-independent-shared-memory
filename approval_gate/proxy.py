@@ -13,14 +13,13 @@ from uuid import uuid4
 
 import configargparse
 
-from . import ProposalError
+from . import ALLOWED_TOOLS, ProposalError
 from .config import Config, load_config
 from .native import warn
 from .proposals import audit, create_or_reuse, prepare
 from .writes import NativeCall, temporary_arguments
 
 _stdout_lock = threading.Lock()
-ALLOWED_TOOLS = ("bm_project", "bm_read", "bm_search", "bm_write")
 
 
 def emit(message: dict[str, Any]) -> None:
