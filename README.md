@@ -71,15 +71,19 @@ uv run --locked --no-sync python -m approval_gate.snippet \
   --client opencode --config approval_gate/config.json
 ```
 
-For Codex snippets, use paths without emoji or other characters above U+FFFF
-for `uv`, the checkout, and the gate configuration file.
-
 Merge the Codex snippet into `~/.codex/config.toml` or the OpenCode snippet into
 `~/.config/opencode/opencode.jsonc`. If a local `basic_memory` entry already
 exists, update `command` and `args` for Codex, or `command` and `codemode`
 (`false`) for OpenCode. Keep existing tool permissions.
 When adding the OpenCode defaults, put them before existing permission rules so
-the existing rules take precedence. Restart the client after saving.
+the existing rules take precedence.
+
+A project-local `basic_memory` entry can override the global launcher. Check
+which entry applies in the project where you will use the gate, and update that
+entry if needed. After saving, restart Codex or reload OpenCode. Then
+[verify the gate in a disposable project](docs/client-connections.md#configuration-and-ownership):
+a synthetic durable write should return a proposal without creating the note
+while approval is pending.
 
 **Claude Code**
 
