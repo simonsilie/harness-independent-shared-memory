@@ -68,12 +68,12 @@ others.
   copied snapshot to `journal_mode=DELETE` before computing its manifest.
   Verify that repeated reads and restores leave the backup unchanged: WAL/SHM
   sidecars can change even during read-only inspection (see
-  `ops/recovery.py` and
-  `tests/ops/test_recovery_integration.py::test_wal_snapshot_remains_reusable_after_reads`).
+  `shared_memory/ops/recovery.py` and
+  `tests/shared_memory/ops/test_recovery_integration.py::test_wal_snapshot_remains_reusable_after_reads`).
 - Verify that the export reader works without Basic Memory by running it in a
   fresh Python process with imports of `basic_memory` and its submodules blocked.
   A before-and-after comparison of `sys.modules` can miss imports that reuse a
-  module already cached by pytest (see `tests/ops/test_export_integration.py`).
+  module already cached by pytest (see `tests/shared_memory/ops/test_export_integration.py`).
 - When reviewing MCP permissions, check permitted subcommands as well as tool
   names. In Basic Memory 1.0.0, `bm_project` supports both project discovery and
   project creation (see `basic_memory/mcp/tools/projects.py` in the installed
@@ -82,18 +82,18 @@ others.
   a trusted root directory. Open children relative to their open parent with
   `O_NOFOLLOW | O_NONBLOCK`, check their type with `fstat()`, and read regular
   files through the same descriptor. Create the destination directory before
-  copying entries so empty directories are preserved (see `ops/recovery.py`
-  and `tests/ops/test_recovery_integration.py`).
+  copying entries so empty directories are preserved (see `shared_memory/ops/recovery.py`
+  and `tests/shared_memory/ops/test_recovery_integration.py`).
 - Verify stdio write gates by sending the request through the actual proxy to a
   disposable native store. Bound reply waits and assert the resulting store
-  state (see `tests/approval_gate/test_native_integration.py`).
+  state (see `tests/shared_memory/approval_gate/test_native_integration.py`).
 - After a native Basic Memory write in a short-lived stdio session, close stdin
   and wait for graceful exit with a deadline. Basic Memory drains accepted
   writes during shutdown. Check the Markdown after process exit in integration
-  tests (see `approval_gate/native.py` and `tests/approval_gate/test_gate.py`).
+  tests (see `shared_memory/approval_gate/native.py` and `tests/shared_memory/approval_gate/test_gate.py`).
 - Verify the approved project UUID in the native session that will execute
   the write. `BASIC_MEMORY_MCP_PROJECT` can take precedence over an explicit
-  UUID (see `tests/approval_gate/test_native_integration.py`).
+  UUID (see `tests/shared_memory/approval_gate/test_native_integration.py`).
 - In stdio subprocess tests, set a deadline for each expected reply and
   terminate and reap the child on timeout. A live child can keep stdout open
   without replying. See the bounded MCP calls in

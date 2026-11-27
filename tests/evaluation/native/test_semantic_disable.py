@@ -7,7 +7,7 @@ from pathlib import Path
 import basic_memory
 import pytest
 
-from build.semantic_runtime import PROJECT_CREATE_PATCH, apply_patch
+from shared_memory.runtime_build import PROJECT_CREATE_PATCH, apply_patch
 
 ROOT = Path(__file__).resolve().parents[3]
 

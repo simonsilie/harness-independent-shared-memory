@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from approval_gate import launch
+from shared_memory.approval_gate import launch
 
 
 def write_config(tmp_path: Path, env: dict[str, str]) -> Path:

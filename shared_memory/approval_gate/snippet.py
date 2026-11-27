@@ -1,14 +1,15 @@
 """Print a client configuration snippet for the approval gate."""
 
-import argparse
 import json
 import shutil
 import tomllib
 from pathlib import Path
 
+import configargparse
+
 from . import ALLOWED_TOOLS
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def render_snippet(client: str, command: Path, checkout: Path, config: Path) -> str:
@@ -43,7 +44,7 @@ def render_snippet(client: str, command: Path, checkout: Path, config: Path) -> 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = configargparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=("codex", "opencode"), required=True)
     parser.add_argument("--config", type=Path, required=True, help="path to the approval gate JSON configuration")
     args = parser.parse_args(argv)

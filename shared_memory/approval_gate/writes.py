@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, NotRequired, TypedDict, cast
 from uuid import UUID
 
 from . import ProposalError
@@ -22,10 +22,59 @@ from .basic_memory_api import (
     valid_project_path_value,
 )
 
-type NativeCall = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+# Client-supplied MCP tool arguments: arbitrary JSON that each function validates for the keys it uses.
+type ToolArguments = dict[str, Any]
+type NativeCall = Callable[[str, ToolArguments], Awaitable[dict[str, Any]]]
 
 
-def effective_metadata(arguments: dict[str, Any]) -> dict[str, Any]:
+class ProjectEntry(TypedDict):
+    """One project from the native ``bm_project`` list reply, limited to the fields used here."""
+
+    name: str
+    qualified_name: NotRequired[str | None]
+    external_id: str
+    source: NotRequired[str]
+    local_path: NotRequired[str]
+
+
+class ProjectListing(TypedDict):
+    """The native ``bm_project`` list reply, limited to the fields used here."""
+
+    projects: list[ProjectEntry]
+    constrained_project: NotRequired[str | None]
+
+
+class NoteRead(TypedDict, total=False):
+    """The native ``bm_read`` reply, limited to the fields used here."""
+
+    file_path: str
+    frontmatter: dict[str, Any]
+    checksum: str
+
+
+async def list_projects(call_native: NativeCall) -> ProjectListing:
+    # Missing keys surface as LookupError, which the proxy reports as an unexpected native response.
+    return cast(ProjectListing, await call_native("bm_project", {"command": "list"}))
+
+
+def effective_metadata(arguments: ToolArguments) -> dict[str, Any]:
+    """Merge a write's frontmatter with its explicit metadata.
+
+    Parameters
+    ----------
+    arguments : ToolArguments
+        ``bm_write`` arguments with string ``content`` and optional ``metadata``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Frontmatter fields, overridden by explicit metadata fields.
+
+    Raises
+    ------
+    ProposalError
+        If the content is not a string, its frontmatter is malformed or the metadata is not an object.
+    """
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ProposalError("A write requires string content.")
@@ -42,6 +91,7 @@ def effective_metadata(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def valid_last_activity(value: Any) -> bool:
+    """Return whether ``value`` is a UTC timestamp, as a datetime or ISO 8601 string."""
     if isinstance(value, datetime):
         parsed = value
     elif isinstance(value, str):
@@ -54,7 +104,25 @@ def valid_last_activity(value: Any) -> bool:
     return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
 
 
-def write_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+def write_arguments(arguments: ToolArguments) -> ToolArguments:
+    """Normalize the overwrite policy of a write.
+
+    Parameters
+    ----------
+    arguments : ToolArguments
+        ``bm_write`` arguments with optional ``expected_checksum`` and ``overwrite``.
+
+    Returns
+    -------
+    ToolArguments
+        A copy of the arguments. Without a checksum, ``overwrite`` is set to ``False`` so the write
+        can only create a note.
+
+    Raises
+    ------
+    ProposalError
+        If the write would replace a note without a usable checksum, or ``overwrite`` is not a boolean.
+    """
     checksum = arguments.get("expected_checksum")
     overwrite = arguments.get("overwrite")
     if checksum is not None:
@@ -68,16 +136,35 @@ def write_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     return {**arguments, "overwrite": False}
 
 
-def _display_name(entry: dict[str, Any]) -> str:
+def _display_name(entry: ProjectEntry) -> str:
     return entry.get("qualified_name") or entry["name"]
 
 
-def _permalinks(entry: dict[str, Any]) -> set[str]:
+def _permalinks(entry: ProjectEntry) -> set[str]:
     return {generate_permalink(_display_name(entry)), generate_permalink(entry["name"])}
 
 
-def resolve_project(project: str, listing: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Resolve a selector to exactly one listed project; also report whether it was a UUID."""
+def resolve_project(project: str, listing: ProjectListing) -> tuple[ProjectEntry, bool]:
+    """Resolve a project selector to exactly one listed project.
+
+    Parameters
+    ----------
+    project : str
+        A project UUID, name, qualified name or permalink.
+    listing : ProjectListing
+        The native project list of the session that will execute the write.
+
+    Returns
+    -------
+    tuple[ProjectEntry, bool]
+        The matching project, and whether the selector was a UUID.
+
+    Raises
+    ------
+    ProposalError
+        If no project or more than one project matches, or the session is constrained to a
+        different set of projects.
+    """
     projects = listing.get("projects", [])
     selector = parse_project(project)
     by_id = isinstance(selector, ProjectById)
@@ -93,8 +180,28 @@ def resolve_project(project: str, listing: dict[str, Any]) -> tuple[dict[str, An
     return matches[0], by_id
 
 
-def strip_project_prefix(path: str, listing: dict[str, Any], project_id: str) -> str:
-    """Drop a leading project permalink from a note path, refusing one that names another project."""
+def strip_project_prefix(path: str, listing: ProjectListing, project_id: str) -> str:
+    """Drop a leading project permalink from a note path.
+
+    Parameters
+    ----------
+    path : str
+        A note path that may start with a project permalink.
+    listing : ProjectListing
+        The native project list used to recognize permalinks.
+    project_id : str
+        The UUID of the project the write targets.
+
+    Returns
+    -------
+    str
+        The path without the permalink, or unchanged if it has none.
+
+    Raises
+    ------
+    ProposalError
+        If the permalink names a different project or more than one project.
+    """
     projects = listing.get("projects", [])
     route = split_project_permalink_prefix(path, set().union(*map(_permalinks, projects)))
     if route is None:
@@ -105,7 +212,28 @@ def strip_project_prefix(path: str, listing: dict[str, Any], project_id: str) ->
     return path
 
 
-def pin_durable_target(arguments: dict[str, Any], listing: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def pin_durable_target(arguments: ToolArguments, listing: ProjectListing) -> tuple[str, ToolArguments]:
+    """Pin a durable write to one project UUID and one Markdown note path.
+
+    Parameters
+    ----------
+    arguments : ToolArguments
+        Client ``bm_write`` arguments.
+    listing : ProjectListing
+        The native project list of the session that will execute the write.
+
+    Returns
+    -------
+    tuple[str, ToolArguments]
+        The project's display name, and the arguments with ``project`` set to its UUID and any note
+        path normalized into ``identifier``.
+
+    Raises
+    ------
+    ProposalError
+        If the project is missing or ambiguous, the overwrite policy is invalid, or the identifier
+        does not name a Markdown file.
+    """
     project = arguments.get("project", arguments.get("project_id"))
     if not isinstance(project, str) or not project.strip():
         raise ProposalError("A durable write requires an explicit project.")
@@ -136,8 +264,31 @@ def pin_durable_target(arguments: dict[str, Any], listing: dict[str, Any]) -> tu
 
 
 async def temporary_arguments(
-    arguments: dict[str, Any], listing: dict[str, Any], call_native: NativeCall
-) -> dict[str, Any] | None:
+    arguments: ToolArguments, listing: ProjectListing, call_native: NativeCall
+) -> ToolArguments | None:
+    """Return the forwarded arguments of a write that may bypass approval as temporary.
+
+    Parameters
+    ----------
+    arguments : ToolArguments
+        Client ``bm_write`` arguments.
+    listing : ProjectListing
+        The native project list of the session that will execute the write.
+    call_native : NativeCall
+        Calls a tool on the native session that will execute the write.
+
+    Returns
+    -------
+    ToolArguments or None
+        The arguments pinned to the project UUID and a path under ``temporary/`` or ``handovers/``
+        of a local project, or ``None`` if the write is not clearly temporary and needs approval.
+
+    Raises
+    ------
+    ProposalError
+        If the content, metadata or overwrite policy is invalid, or a checksum-guarded update of a
+        temporary note no longer matches the native checksum.
+    """
     fields = effective_metadata(arguments)
     status = fields.get("status")
     if fields.get("kind") != "temporary" or status not in ("active", "completed", "archived"):
@@ -201,7 +352,7 @@ async def temporary_arguments(
         return forwarded if status == "active" else None
     if identifier is None:
         return None
-    existing = await call_native("bm_read", {"identifier": target.as_posix(), "project": project_id})
+    existing = cast(NoteRead, await call_native("bm_read", {"identifier": target.as_posix(), "project": project_id}))
     if existing.get("file_path") != target.as_posix() or not isinstance(existing.get("frontmatter"), dict):
         return None
     if existing["frontmatter"].get("kind") != "temporary":

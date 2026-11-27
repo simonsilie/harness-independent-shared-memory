@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Annotated, Any
 
+import configargparse
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, field_validator
 
 from . import ProposalError
@@ -28,6 +29,12 @@ class Config(BaseModel):
         if command[0].startswith("~"):
             return [str(Path(command[0]).expanduser()), *command[1:]]
         return command
+
+
+def add_config_argument(parser: configargparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
+    )
 
 
 def load_config(path: Path) -> Config:

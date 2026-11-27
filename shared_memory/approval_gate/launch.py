@@ -7,7 +7,7 @@ import configargparse
 
 from . import ProposalError
 from .basic_memory_api import BasicMemoryConfig
-from .config import Config, load_config
+from .config import Config, add_config_argument, load_config
 from .proxy import run_proxy
 
 # ADR 0007: these override the configuration so the store never uses a model or external service.
@@ -22,9 +22,7 @@ MODEL_FREE_ENV = {
 
 def prepare_launch(argv: list[str] | None, description: str) -> tuple[Config, Path]:
     parser = configargparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
-    )
+    add_config_argument(parser)
     args = parser.parse_args(argv)
     os.umask(0o077)
     try:

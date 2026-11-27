@@ -25,7 +25,7 @@ uv sync --locked
 ```
 
 Run a command with `--help` to see its environment variables. For example,
-`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked python build/semantic_runtime.py build`
+`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked python shared_memory/runtime_build.py build`
 sets the output directory. Command-line arguments take precedence.
 `LOGURU_LEVEL` controls which status messages appear on stderr.
 
@@ -47,7 +47,7 @@ Memory connection keeps approval in chat for a simpler workflow.
 To set up the gate, copy the configuration template from the repository root.
 
 ```sh
-cp approval_gate/config.example.json approval_gate/config.json
+cp shared_memory/approval_gate/config.example.json shared_memory/approval_gate/config.json
 ```
 
 Replace the placeholder paths in that file with absolute paths to your checkout
@@ -64,11 +64,11 @@ Use `basic-memory project add` to add projects manually.
 From the checkout root, print the snippet for the client you want to configure:
 
 ```sh
-uv run --locked --no-sync python -m approval_gate.snippet \
-  --client codex --config approval_gate/config.json
+uv run --locked --no-sync python -m shared_memory.approval_gate.snippet \
+  --client codex --config shared_memory/approval_gate/config.json
 
-uv run --locked --no-sync python -m approval_gate.snippet \
-  --client opencode --config approval_gate/config.json
+uv run --locked --no-sync python -m shared_memory.approval_gate.snippet \
+  --client opencode --config shared_memory/approval_gate/config.json
 ```
 
 Merge the Codex snippet into `~/.codex/config.toml` or the OpenCode snippet into
@@ -94,7 +94,7 @@ replace an existing user-scope `basic_memory` entry, remove it first with
 ```sh
 claude mcp add --scope user --transport stdio basic_memory \
   -- "/path/to/uv" run --directory "/path/to/checkout" --locked --no-sync \
-    shared-memory-approval-gate --config "/path/to/checkout/approval_gate/config.json"
+    shared-memory-approval-gate --config "/path/to/checkout/shared_memory/approval_gate/config.json"
 ```
 
 To match the tool set above, merge these rules into `~/.claude/settings.json`.

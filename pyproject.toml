@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Read-only recall evaluation of Basic Memory as shared memory."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "basic-memory==1.0.0+semantic.2",
     "configargparse>=1.7.5",
@@ -17,9 +17,9 @@ dependencies = [
 ]
 
 [project.scripts]
-memory-ops = "ops.__main__:main"
-shared-memory-mcp = "approval_gate.launch:mcp_main"
-shared-memory-approval-gate = "approval_gate.launch:gate_main"
+memory-ops = "shared_memory.ops.__main__:main"
+shared-memory-mcp = "shared_memory.approval_gate.launch:mcp_main"
+shared-memory-approval-gate = "shared_memory.approval_gate.launch:gate_main"
 
 [dependency-groups]
 dev = [
@@ -28,16 +28,14 @@ dev = [
     "pytest>=9.2.0",
 ]
 
-[tool.uv]
-prerelease = "allow"
-
 [tool.uv.sources]
 basic-memory = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" }
 
 [tool.uv.build-backend]
-module-name = ["approval_gate", "ops"]
+module-name = "shared_memory"
 module-root = ""
-source-exclude = ["/approval_gate/config.json", "/build/.verify-venv/**", "/build/dist/**"]
+source-exclude = ["/shared_memory/approval_gate/config.json", "/build/.verify-venv/**", "/build/dist/**"]
+wheel-exclude = ["shared_memory/runtime_build.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -50,7 +48,7 @@ markers = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 extend-exclude = [
     ".venv",
     "evaluation/*/runs",

@@ -3,7 +3,6 @@
 import json
 import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import configargparse
@@ -11,7 +10,7 @@ from loguru import logger
 
 from . import ProposalError
 from .approvals import approve, reject
-from .config import Config, load_config
+from .config import Config, add_config_argument, load_config
 from .proposals import expired, list_proposals
 
 
@@ -74,9 +73,7 @@ def command_reject(config: Config, proposal_id: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = configargparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
-    )
+    add_config_argument(parser)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list")
     approve_parser = commands.add_parser("approve")

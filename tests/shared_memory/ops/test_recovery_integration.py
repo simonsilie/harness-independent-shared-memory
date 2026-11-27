@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ops import backup, inventory, recovery, restore
+from shared_memory.ops import backup, inventory, recovery, restore
 
 
 @pytest.fixture
@@ -310,7 +310,7 @@ def test_restore_optional_manifest_digest(store, tmp_path):
 
 
 def test_cli_restore_accepts_expected_manifest_digest(store, tmp_path, monkeypatch):
-    from ops.__main__ import main
+    from shared_memory.ops.__main__ import main
 
     archive = tmp_path / "backup"
     backup(store, archive)

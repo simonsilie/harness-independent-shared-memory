@@ -26,8 +26,8 @@ retention deletion is installed. A copy on the same computer does not protect
 against loss of that computer or its disk.
 
 Backup, restore and [portable export](portable-export.md) are bundled as the
-three stable commands of the [``ops`` package](../ops). The
-[implementation](../ops/recovery.py) uses SQLite's online
+three stable commands of the [``ops`` package](../shared_memory/ops). The
+[implementation](../shared_memory/ops/recovery.py) uses SQLite's online
 backup API, including committed WAL data, rather than copying a live database
 file. It copies all configured local project trees, empty directories, the
 ignore rules, configuration and observation log. The observation log is read
@@ -98,7 +98,7 @@ note contents, checksums, lifecycle metadata and the observation log. Native
 reindexing rebuilt text search, and the backup still matched its manifest after
 verification. Keep snapshot identifiers and detailed results with the backup.
 
-[Isolated integration tests](../tests/ops/test_recovery_integration.py)
+[Isolated integration tests](../tests/shared_memory/ops/test_recovery_integration.py)
 cover active and archived fixtures, WAL-only committed data and two successive
 restores. They also reject unindexed Markdown, corrupted payloads and existing
 restore destinations.

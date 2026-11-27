@@ -11,7 +11,7 @@ from typing import Any
 import configargparse
 
 from . import ALLOWED_TOOLS, ProposalError
-from .config import Config, load_config
+from .config import Config, add_config_argument, load_config
 from .native import (
     ENVELOPE_KEYS,
     MESSAGE_LIMIT,
@@ -22,7 +22,7 @@ from .native import (
     warn,
 )
 from .proposals import audit, create_or_reuse, prepare
-from .writes import NativeCall, temporary_arguments
+from .writes import NativeCall, list_projects, temporary_arguments
 
 
 def envelope(request: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +69,7 @@ async def handle_write(
     if not isinstance(arguments, dict):
         return ClientReply(tool_response(request, "bm_write arguments must be an object", is_error=True))
     try:
-        listing = await call_native("bm_project", {"command": "list"})
+        listing = await list_projects(call_native)
         temporary = await temporary_arguments(arguments, listing, call_native)
         if temporary is not None:
             return NativeRequest({**request, "params": {**request["params"], "arguments": temporary}})
@@ -85,9 +85,17 @@ async def handle_write(
         return ClientReply(tool_response(request, text, is_error=True))
     action = "Created" if created else "Reusing open"
     command = shlex.join(
-        [sys.executable, "-m", "approval_gate.cli", "--config", str(config_path.resolve()), "approve", proposal["id"]]
+        [
+            sys.executable,
+            "-m",
+            "shared_memory.approval_gate.cli",
+            "--config",
+            str(config_path.resolve()),
+            "approve",
+            proposal["id"],
+        ]
     )
-    checkout = shlex.quote(str(Path(__file__).resolve().parents[1]))
+    checkout = shlex.quote(str(Path(__file__).resolve().parents[2]))
     text = (
         f"{action} approval proposal {proposal['id']}. "
         "Nothing was written. Present this proposal to the owner; "
@@ -213,9 +221,7 @@ def run_proxy(config: Config, config_path: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = configargparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--config", type=Path, default=Path(__file__).with_name("config.json"), env_var="SHARED_MEMORY_APPROVAL_CONFIG"
-    )
+    add_config_argument(parser)
     args = parser.parse_args(argv)
     config = load_config(args.config)
     return run_proxy(config, args.config)

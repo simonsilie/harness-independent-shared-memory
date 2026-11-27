@@ -11,9 +11,9 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
-from approval_gate import ProposalError, cli
-from approval_gate.config import Config
-from approval_gate.proposals import list_proposals
+from shared_memory.approval_gate import ProposalError, cli
+from shared_memory.approval_gate.config import Config
+from shared_memory.approval_gate.proposals import list_proposals
 
 DURABLE = (
     "---\ntitle: Gated decision\nkind: durable\nstatus: active\nsource: integration check\n---\n\nKeep SQLite local.\n"
@@ -78,8 +78,8 @@ def proxy(store, tmp_path):
     assert "APPROVAL_GATE_TEST_SECRET" not in json.loads(config_path.read_text())["env"]
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "approval_gate.proxy", "--config", str(config_path)],
-        cwd=Path(__file__).resolve().parents[2],
+        args=["-m", "shared_memory.approval_gate.proxy", "--config", str(config_path)],
+        cwd=Path(__file__).resolve().parents[3],
         env={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
     )
     return root, config, parameters
