@@ -41,6 +41,13 @@ others.
   (`POST /api/experimental/mcp/{server}/connect?location[directory]=...`) only
   works after a first `opencode run` has opened the location, which is why the
   harnesses run a readiness turn before connecting.
+- OpenCode 2.4.1 detects a running local Ollama without a provider entry or
+  login, so real-client checks can run on a local model (`--model
+  ollama/<model>`). `opencode mcp list` shows only file-based configuration, not
+  servers injected with `OPENCODE_CONFIG_CONTENT`. To see the tool inventory
+  that reaches the model, add an `@ai-sdk/openai-compatible` provider whose
+  `baseURL` points at a logging proxy in front of Ollama's `/v1` endpoint, and
+  record the tool names of each chat request.
 - Match real-client tool responses by call ID or exact arguments rather than
   transcript position: parallel calls can complete out of order. The protected
   eligibility probe observed OpenCode's second search finishing before its first
