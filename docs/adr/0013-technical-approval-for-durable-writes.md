@@ -12,6 +12,12 @@ The owner CLI lists, approves and rejects proposals. Before confirming, the owne
 
 The gate's code and its configuration template live in this repository, with the local configuration gitignored. The productive client connection is redirected to the gate by changing the existing tracked toolbox configurations, which keep absolute-path placeholders; operational and evaluation launchers keep using the native server. Switching the productive clients requires explicit owner approval and follows implementation and disposable-store verification. ADR 0002 remains as the historical decision, superseded by this one.
 
+## Threat model
+
+The gate protects against unintended durable writes: an agent that follows injected instructions, misreads the owner, or claims an approval that never happened. It does not protect against an agent that deliberately works around it. The terminal check only requires that standard input and output are TTYs, and the proxy returns the exact approval command to the agent. An agent with shell access can run that command in a pseudo-terminal it controls; Codex already runs shell commands in one. An agent with file access can also write Markdown into a note root directly, and the native watcher indexes it like any other note.
+
+The boundary therefore depends on what the agent's sandbox can write. The note roots and native state under `$HOME/SharedMemory`, the configured `proposals_dir` and the configured `audit_log` must never be writable roots of an agent sandbox, directly or through a parent directory. The Codex writable root for automatic observations ([ADR 0012](0012-automatic-lightweight-handover-observations.md)) must remain exactly `$HOME/SharedMemory/observations`, a sibling of these paths. Granting `$HOME/SharedMemory` itself would break the boundary. A client without an equivalent sandbox, or with full shell access outside one, is only covered against unintended writes.
+
 ## Proxy and approval flow
 
 ```mermaid
