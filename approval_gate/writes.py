@@ -1,6 +1,6 @@
 """Write validation and eligibility for automatic temporary writes."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -22,7 +22,7 @@ from .basic_memory_api import (
     valid_project_path_value,
 )
 
-type NativeCall = Callable[[str, dict[str, Any]], dict[str, Any]]
+type NativeCall = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def effective_metadata(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -105,13 +105,13 @@ def strip_project_prefix(path: str, listing: dict[str, Any], project_id: str) ->
     return path
 
 
-def pin_durable_target(arguments: dict[str, Any], call_native: NativeCall) -> tuple[str, dict[str, Any]]:
+async def pin_durable_target(arguments: dict[str, Any], call_native: NativeCall) -> tuple[str, dict[str, Any]]:
     project = arguments.get("project", arguments.get("project_id"))
     if not isinstance(project, str) or not project.strip():
         raise ProposalError("A durable write requires an explicit project.")
     project = project.strip()
     arguments = write_arguments(arguments)
-    listing = call_native("bm_project", {"command": "list"})
+    listing = await call_native("bm_project", {"command": "list"})
     selected, by_id = resolve_project(project, listing)
     project_id = str(UUID(selected["external_id"]))
     arguments.pop("project_id", None)
@@ -136,7 +136,7 @@ def pin_durable_target(arguments: dict[str, Any], call_native: NativeCall) -> tu
     return _display_name(selected), arguments
 
 
-def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> dict[str, Any] | None:
+async def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> dict[str, Any] | None:
     fields = effective_metadata(arguments)
     status = fields.get("status")
     if fields.get("kind") != "temporary" or status not in ("active", "completed", "archived"):
@@ -161,7 +161,7 @@ def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> d
     if not parts or not {"temporary", "handovers"}.intersection(parts):
         return None
 
-    listing = call_native("bm_project", {"command": "list"})
+    listing = await call_native("bm_project", {"command": "list"})
     try:
         selected, by_id = resolve_project(project.strip(), listing)
         project_id = str(UUID(selected["external_id"]))
@@ -201,7 +201,7 @@ def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> d
         return forwarded if status == "active" else None
     if identifier is None:
         return None
-    existing = call_native("bm_read", {"identifier": target.as_posix(), "project": project_id})
+    existing = await call_native("bm_read", {"identifier": target.as_posix(), "project": project_id})
     if existing.get("file_path") != target.as_posix() or not isinstance(existing.get("frontmatter"), dict):
         return None
     if existing["frontmatter"].get("kind") != "temporary":

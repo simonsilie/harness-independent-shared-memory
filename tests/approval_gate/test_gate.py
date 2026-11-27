@@ -1,3 +1,4 @@
+import asyncio
 import json
 import stat
 import subprocess
@@ -30,7 +31,7 @@ PROJECT_ID = "00000000-0000-4000-8000-000000000001"
 OTHER_PROJECT_ID = "00000000-0000-4000-8000-000000000002"
 
 
-def project_listing(_name, _arguments):
+async def project_listing(_name, _arguments):
     return {
         "projects": [
             {"name": "personal", "external_id": PROJECT_ID},
@@ -109,6 +110,8 @@ for line in sys.stdin:
     else:
         result = {}
     log.flush()
+    if mode == "exit" and message.get("params", {}).get("name") == "bm_write":
+        sys.exit(0)
     if mode in (method, message.get("params", {}).get("name")) and mode is not None:
         continue
     if "id" in message:
@@ -133,7 +136,7 @@ def native(tmp_path):
 
 
 def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
-    def call_native(_name, _arguments):
+    async def call_native(_name, _arguments):
         return {
             "projects": [
                 {"name": "personal", "external_id": PROJECT_ID, "source": "local", "local_path": str(tmp_path)}
@@ -141,16 +144,18 @@ def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
         }
 
     args = {"content": temporary_content(), "identifier": "temporary/handover.md", "project": "personal"}
-    assert temporary_arguments(args, call_native)
-    assert temporary_arguments(args | {"identifier": "personal/handovers/note.md"}, call_native)
-    assert temporary_arguments(args | {"identifier": None, "directory": "temporary", "title": "Note"}, call_native)
+    assert asyncio.run(temporary_arguments(args, call_native))
+    assert asyncio.run(temporary_arguments(args | {"identifier": "personal/handovers/note.md"}, call_native))
+    assert asyncio.run(
+        temporary_arguments(args | {"identifier": None, "directory": "temporary", "title": "Note"}, call_native)
+    )
     for overrides in (
         {"content": DURABLE},
         {"metadata": '{"kind":"durable"}'},
         {"content": temporary_content().replace("status: active", "status: archived")},
         {"content": temporary_content().replace(STAMP, "not-a-date")},
     ):
-        assert temporary_arguments(args | overrides, call_native) is None
+        assert asyncio.run(temporary_arguments(args | overrides, call_native)) is None
     for target in (
         "durable/temporary/../../durable/decision.md",
         "temporary/../durable/decision.md",
@@ -159,7 +164,7 @@ def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
         "temporary\\handover.md",
         "..",
     ):
-        assert temporary_arguments(args | {"identifier": target}, call_native) is None, target
+        assert asyncio.run(temporary_arguments(args | {"identifier": target}, call_native)) is None, target
 
 
 RESOLVABLE_TARGETS = [
@@ -192,7 +197,10 @@ def listing(tmp_path: Path) -> dict[str, Any]:
 
 @pytest.fixture
 def call_native(listing: dict[str, Any]) -> NativeCall:
-    return lambda _name, _arguments: listing
+    async def call(_name, _arguments):
+        return listing
+
+    return call
 
 
 @pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
@@ -200,7 +208,7 @@ def test_temporary_write_resolves_project(call_native: NativeCall, project: str,
     sut = temporary_arguments
     args = {"content": temporary_content(), "identifier": identifier, "project": project}
 
-    forwarded = sut(args, call_native)
+    forwarded = asyncio.run(sut(args, call_native))
 
     assert forwarded is not None and forwarded["project"] == PROJECT_ID
 
@@ -212,7 +220,7 @@ def test_temporary_write_with_unresolvable_project_needs_approval(
     sut = temporary_arguments
     args = {"content": temporary_content(), "identifier": identifier, "project": project}
 
-    forwarded = sut(args, call_native)
+    forwarded = asyncio.run(sut(args, call_native))
 
     assert forwarded is None
 
@@ -222,7 +230,7 @@ def test_durable_write_resolves_project(call_native: NativeCall, project: str, i
     sut = pin_durable_target
     args = {"content": DURABLE, "identifier": identifier, "project": project}
 
-    _, pinned = sut(args, call_native)
+    _, pinned = asyncio.run(sut(args, call_native))
 
     assert pinned["project"] == PROJECT_ID
 
@@ -233,7 +241,7 @@ def test_durable_write_refuses_unresolvable_project(call_native: NativeCall, pro
     args = {"content": DURABLE, "identifier": identifier, "project": project}
 
     with pytest.raises(ProposalError):
-        sut(args, call_native)
+        asyncio.run(sut(args, call_native))
 
 
 def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], call_native: NativeCall) -> None:
@@ -241,7 +249,7 @@ def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], ca
     listing["constrained_project"] = "personal"
     args = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
 
-    forwarded = sut(args, call_native)
+    forwarded = asyncio.run(sut(args, call_native))
 
     assert forwarded is None
 
@@ -255,7 +263,7 @@ def test_malformed_native_listing_is_a_visible_tool_error(
     arguments = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
     request = {"id": 1, "params": {"name": "bm_write", "arguments": arguments}}
 
-    response = sut(request, config, tmp_path / "config.json", call_native)
+    response = asyncio.run(sut(request, config, tmp_path / "config.json", call_native))
 
     assert response["result"]["isError"]
 
@@ -268,14 +276,14 @@ def test_malformed_frontmatter_is_reported():
 def test_integration_explicit_project_required_for_durable(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="explicit project"):
-        create_or_reuse(config, {"content": DURABLE, "identifier": "decision.md"}, project_listing)
+        asyncio.run(create_or_reuse(config, {"content": DURABLE, "identifier": "decision.md"}, project_listing))
 
 
 def test_integration_dedupe_matches_the_exact_write(tmp_path, native):
     config = make_config(tmp_path, native[0])
     args = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    first, created = create_or_reuse(config, args, project_listing)
-    second, reused = create_or_reuse(config, args, project_listing)
+    first, created = asyncio.run(create_or_reuse(config, args, project_listing))
+    second, reused = asyncio.run(create_or_reuse(config, args, project_listing))
     assert created and not reused
     assert first["id"] == second["id"]
     for change in (
@@ -284,7 +292,7 @@ def test_integration_dedupe_matches_the_exact_write(tmp_path, native):
         {"metadata": {"tag": "other"}},
         {"expected_checksum": "another revision"},
     ):
-        distinct, created = create_or_reuse(config, args | change, project_listing)
+        distinct, created = asyncio.run(create_or_reuse(config, args | change, project_listing))
         assert created and distinct["id"] != first["id"]
     assert first["source"] == "session 42"
     assert first["content_hash"]
@@ -300,7 +308,7 @@ def test_integration_concurrent_identical_writes_share_one_proposal(tmp_path, na
 
     def create():
         try:
-            ids.append(create_or_reuse(config, args, project_listing)[0]["id"])
+            ids.append(asyncio.run(create_or_reuse(config, args, project_listing))[0]["id"])
         except Exception as error:  # noqa: BLE001 - collected for assertion
             errors.append(error)
 
@@ -318,10 +326,10 @@ def test_integration_expired_proposals_are_not_reused(tmp_path, native):
     config = make_config(tmp_path, native[0])
     args = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    proposal, _ = create_or_reuse(config, args, project_listing, now=now)
+    proposal, _ = asyncio.run(create_or_reuse(config, args, project_listing, now=now))
     deadline = now + timedelta(hours=config.ttl_hours)
 
-    fresh, created = create_or_reuse(config, args, project_listing, now=deadline)
+    fresh, created = asyncio.run(create_or_reuse(config, args, project_listing, now=deadline))
 
     assert expired(proposal, now=deadline)
     assert created and fresh["id"] != proposal["id"]
@@ -370,21 +378,27 @@ def test_integration_audit_preserves_working_directory_permissions(tmp_path, nat
     assert stat.S_IMODE(config.audit_log.stat().st_mode) == 0o600
 
 
+async def empty_reply(_name, _arguments):
+    return {}
+
+
 def test_integration_malformed_write_is_a_visible_tool_error(tmp_path, native):
     config = make_config(tmp_path, native[0])
     request = {"id": 1, "params": {"arguments": {"content": DURABLE, "identifier": "decision.md"}}}
-    response = proxy.handle_write(request, config, tmp_path / "config.json", lambda *_: {})
+    response = asyncio.run(proxy.handle_write(request, config, tmp_path / "config.json", empty_reply))
     assert response["result"]["isError"]
     assert [json.loads(line)["event"] for line in config.audit_log.read_text().splitlines()] == ["write_refused"]
 
 
 def test_integration_write_notification_returns_visible_proposal_id(tmp_path, native):
     config = make_config(tmp_path, native[0])
-    response = proxy.handle_write(
-        {"params": {"arguments": {"content": DURABLE, "project": "personal"}}},
-        config,
-        tmp_path / "config.json",
-        project_listing,
+    response = asyncio.run(
+        proxy.handle_write(
+            {"params": {"arguments": {"content": DURABLE, "project": "personal"}}},
+            config,
+            tmp_path / "config.json",
+            project_listing,
+        )
     )
     assert response["result"]["isError"]
     assert "Proposal" in response["result"]["content"][0]["text"]
@@ -546,7 +560,7 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
         "identifier": "personal/decisions/decision",
         "expected_checksum": "sha256:abc",
     }
-    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
 
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
 
@@ -565,7 +579,7 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
 def test_integration_approval_can_be_retried_after_audit_failure(tmp_path, native):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
     saved_audit = config.audit_log.rename(tmp_path / "saved-audit.jsonl")
     config.audit_log.mkdir()
 
@@ -588,7 +602,7 @@ def test_integration_approval_succeeds_when_final_audit_append_fails(tmp_path, n
     config = make_config(tmp_path, native[0])
     config = config.model_copy(update={"env": {"APPROVAL_GATE_FAKE_BLOCK_AUDIT": str(config.audit_log)}})
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
 
     assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
 
@@ -600,9 +614,10 @@ def test_integration_approval_succeeds_when_final_audit_append_fails(tmp_path, n
 @pytest.mark.parametrize(
     ("mode", "expected_status", "expected_error"),
     [
-        ("initialize", "pending", "initialize timed out"),
+        ("bm_project", "pending", "bm_project timed out"),
         ("bm_write", "outcome_unknown", "bm_write timed out"),
         ("unknown", "outcome_unknown", "Check the native store.*OUTCOME_UNKNOWN"),
+        ("exit", "outcome_unknown", "Check the native store.*closed before replying"),
         ("shutdown", "outcome_unknown", "timed out during graceful shutdown"),
         ("stale", "outcome_unknown", "does not match the accepted revision"),
     ],
@@ -610,7 +625,7 @@ def test_integration_approval_succeeds_when_final_audit_append_fails(tmp_path, n
 def test_integration_native_approval_failure(tmp_path, native, monkeypatch, mode, expected_status, expected_error):
     config = make_config(tmp_path, native[0]).model_copy(update={"env": {"APPROVAL_GATE_FAKE_MODE": mode}})
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
     monkeypatch.setattr(native_transport, "REQUEST_TIMEOUT", 1)
     monkeypatch.setattr(native_transport, "SHUTDOWN_TIMEOUT", 1)
 
@@ -628,7 +643,7 @@ def test_integration_approval_preserves_native_error_when_audit_fails(tmp_path, 
         update={"env": {"APPROVAL_GATE_FAKE_MODE": "bm_write", "APPROVAL_GATE_FAKE_BLOCK_AUDIT": str(config.audit_log)}}
     )
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal, _ = create_or_reuse(config, arguments, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
     monkeypatch.setattr(native_transport, "REQUEST_TIMEOUT", 1)
 
     with pytest.raises(ProposalError, match="Check the native store.*Native bm_write timed out") as failure:
@@ -644,7 +659,7 @@ def test_integration_approval_preserves_native_error_when_audit_fails(tmp_path, 
 def test_integration_legacy_proposal_without_pinned_project_requires_resubmission(tmp_path, native):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    legacy, _ = create_or_reuse(config, arguments, project_listing)
+    legacy, _ = asyncio.run(create_or_reuse(config, arguments, project_listing))
     del legacy["project_external_id"]
     legacy["arguments"]["project"] = "personal"
     save_proposal(config, legacy)
@@ -652,14 +667,14 @@ def test_integration_legacy_proposal_without_pinned_project_requires_resubmissio
     with pytest.raises(ProposalError, match="no pinned project UUID"):
         cli.command_approve(config, legacy["id"], confirm=lambda _: True)
 
-    proposal, created = create_or_reuse(config, arguments, project_listing)
+    proposal, created = asyncio.run(create_or_reuse(config, arguments, project_listing))
     assert created and proposal["id"] != legacy["id"]
     assert proposal["arguments"]["project"] == PROJECT_ID
 
 
 def test_integration_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
     config = make_config(tmp_path, native[0])
-    proposal, _ = create_or_reuse(config, {"content": DURABLE, "project": "personal"}, project_listing)
+    proposal, _ = asyncio.run(create_or_reuse(config, {"content": DURABLE, "project": "personal"}, project_listing))
     assert cli.command_reject(config, proposal["id"]) == 0
     assert load_proposal(config, proposal["id"])["status"] == "rejected"
     with pytest.raises(ProposalError, match="already rejected"):
@@ -670,7 +685,7 @@ def test_integration_owner_cli_rejects_and_keeps_proposal(tmp_path, native):
 def test_integration_owner_cli_rechecks_proposal_after_confirmation(tmp_path, native, change):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "decision.md"}
-    proposal_id = create_or_reuse(config, arguments, project_listing)[0]["id"]
+    proposal_id = asyncio.run(create_or_reuse(config, arguments, project_listing))[0]["id"]
 
     def confirm(_prompt):
         if change == "reject":
@@ -693,7 +708,7 @@ def test_integration_owner_cli_rechecks_proposal_after_confirmation(tmp_path, na
 def test_integration_approval_requires_a_terminal(tmp_path, native, capsys, monkeypatch):
     config = make_config(tmp_path, native[0])
     arguments = {"content": DURABLE, "project": "personal", "identifier": "other.md", "expected_checksum": "revision"}
-    proposal_id = create_or_reuse(config, arguments, project_listing)[0]["id"]
+    proposal_id = asyncio.run(create_or_reuse(config, arguments, project_listing))[0]["id"]
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
     with pytest.raises(ProposalError, match="interactive terminal"):
@@ -708,4 +723,6 @@ def test_integration_approval_requires_a_terminal(tmp_path, native, capsys, monk
 def test_integration_proposal_refuses_unconditional_overwrite(tmp_path, native):
     config = make_config(tmp_path, native[0])
     with pytest.raises(ProposalError, match="expected_checksum"):
-        create_or_reuse(config, {"content": DURABLE, "project": "personal", "overwrite": True}, project_listing)
+        asyncio.run(
+            create_or_reuse(config, {"content": DURABLE, "project": "personal", "overwrite": True}, project_listing)
+        )

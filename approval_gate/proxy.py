@@ -1,38 +1,27 @@
 """Transparent stdio MCP proxy that gates durable bm_write calls."""
 
+import asyncio
 import json
-import os
 import shlex
-import subprocess
 import sys
-import threading
 from pathlib import Path
-from queue import Empty, Queue
 from typing import Any
-from uuid import uuid4
 
 import configargparse
 
 from . import ALLOWED_TOOLS, ProposalError
 from .config import Config, load_config
-from .native import warn
+from .native import (
+    ENVELOPE_KEYS,
+    MESSAGE_LIMIT,
+    PROTOCOL_VERSION_KEY,
+    NativeClient,
+    start_native,
+    structured_data,
+    warn,
+)
 from .proposals import audit, create_or_reuse, prepare
 from .writes import NativeCall, temporary_arguments
-
-_stdout_lock = threading.Lock()
-PROTOCOL_VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
-# MCP 2026-07-28 clients skip initialize and send these keys with every request.
-ENVELOPE_KEYS = (
-    PROTOCOL_VERSION_KEY,
-    "io.modelcontextprotocol/clientCapabilities",
-    "io.modelcontextprotocol/clientInfo",
-)
-
-
-def emit(message: dict[str, Any]) -> None:
-    with _stdout_lock:
-        sys.stdout.write(json.dumps(message, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
 
 
 def envelope(request: dict[str, Any]) -> dict[str, Any]:
@@ -58,15 +47,17 @@ def tool_response(
     }
 
 
-def handle_write(request: dict[str, Any], config: Config, config_path: Path, call_native: NativeCall) -> dict[str, Any]:
+async def handle_write(
+    request: dict[str, Any], config: Config, config_path: Path, call_native: NativeCall
+) -> dict[str, Any]:
     arguments = request["params"].get("arguments", {})
     if not isinstance(arguments, dict):
         return tool_response(request, "bm_write arguments must be an object", is_error=True)
     try:
-        temporary = temporary_arguments(arguments, call_native)
+        temporary = await temporary_arguments(arguments, call_native)
         if temporary is not None:
             return {**request, "params": {**request["params"], "arguments": temporary}}
-        proposal, created = create_or_reuse(config, arguments, call_native)
+        proposal, created = await create_or_reuse(config, arguments, call_native)
     except (ProposalError, LookupError, ValueError) as error:
         # A malformed native reply must not escape and stop the client relay thread.
         reason = str(error) if isinstance(error, ProposalError) else f"Unexpected native response: {error!r}"
@@ -90,68 +81,32 @@ def handle_write(request: dict[str, Any], config: Config, config_path: Path, cal
     return tool_response(request, text, proposal_id=proposal["id"])
 
 
-def run_proxy(config: Config, config_path: Path) -> int:
+async def _run_proxy(config: Config, config_path: Path) -> int:
     prepare(config)
-    environment = os.environ | (config.env or {})
-    native = subprocess.Popen(
-        config.native_command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        env=environment,
-    )
-    assert native.stdin is not None and native.stdout is not None
-    internal_id_prefix = f"approval-gate-{uuid4().hex}-"
-    pending: dict[str, Queue[dict[str, Any]]] = {}
-    pending_lock = threading.Lock()
+    native = await start_native(config)
+    client = NativeClient(native)
+    loop = asyncio.get_running_loop()
+    client_in = asyncio.StreamReader(limit=MESSAGE_LIMIT)
+    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(client_in), sys.stdin)
+    transport, protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, sys.stdout)
+    client_out = asyncio.StreamWriter(transport, protocol, None, loop)
 
-    def send_native(message: dict[str, Any]) -> None:
-        native.stdin.write(json.dumps(message) + "\n")
-        native.stdin.flush()
+    async def write_client(data: bytes) -> None:
+        client_out.write(data)
+        await client_out.drain()
 
-    def call_native(name: str, arguments: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
-        request_id = f"{internal_id_prefix}{uuid4().hex}"
-        replies: Queue[dict[str, Any]] = Queue(maxsize=1)
-        with pending_lock:
-            pending[request_id] = replies
+    async def emit(message: dict[str, Any]) -> None:
+        await write_client((json.dumps(message, ensure_ascii=False) + "\n").encode())
+
+    def native_call(meta: dict[str, Any]) -> NativeCall:
+        async def call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            return structured_data(await client.call_tool(name, arguments, meta), name)
+
+        return call
+
+    async def client_to_native() -> None:
         try:
-            send_native(
-                {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "method": "tools/call",
-                    "params": {
-                        "name": name,
-                        "arguments": {**arguments, "output_format": "json"},
-                        **({"_meta": meta} if meta else {}),
-                    },
-                }
-            )
-            reply = replies.get(timeout=20)
-        except Empty as error:
-            raise ProposalError(f"Native {name} timed out.") from error
-        finally:
-            with pending_lock:
-                pending.pop(request_id, None)
-        if "error" in reply:
-            raise ProposalError(f"Native {name} failed: {reply['error']}")
-        result = reply.get("result")
-        if not isinstance(result, dict):
-            raise ProposalError(f"Native {name} did not return a tool result.")
-        if result.get("isError"):
-            raise ProposalError(f"Native {name} refused: {result.get('content')}")
-        data = result.get("structuredContent")
-        if not isinstance(data, dict):
-            raise ProposalError(f"Native {name} did not return structured data.")
-        data = data.get("result", data)
-        if not isinstance(data, dict):
-            raise ProposalError(f"Native {name} did not return an object.")
-        return data
-
-    def client_to_native() -> None:
-        try:
-            for line in sys.stdin:
+            while line := await client_in.readline():
                 if not line.strip():
                     continue
                 try:
@@ -164,78 +119,65 @@ def run_proxy(config: Config, config_path: Path) -> int:
                     if not isinstance(message, dict):
                         continue
                     if message.get("method") != "tools/call":
-                        send_native(message)
+                        await client.send(message)
                         continue
                     params = message.get("params")
                     if not isinstance(params, dict) or params.get("name") not in ALLOWED_TOOLS:
-                        emit(tool_response(message, "Tool is not allowed by the approval gate", is_error=True))
+                        await emit(tool_response(message, "Tool is not allowed by the approval gate", is_error=True))
                         continue
                     name = params["name"]
                     if name == "bm_project":
                         arguments = params.get("arguments")
                         if not isinstance(arguments, dict) or arguments.get("command") not in ("list", "recent"):
-                            emit(tool_response(message, "bm_project only allows list and recent", is_error=True))
+                            await emit(tool_response(message, "bm_project only allows list and recent", is_error=True))
                             continue
                     if name != "bm_write":
-                        send_native(message)
+                        await client.send(message)
                         continue
                     if batch:
-                        emit(tool_response(message, "Batched bm_write calls are not allowed", is_error=True))
+                        await emit(tool_response(message, "Batched bm_write calls are not allowed", is_error=True))
                         continue
                     try:
-                        meta = envelope(message)
-                        response = handle_write(
-                            message, config, config_path, lambda name, arguments: call_native(name, arguments, meta)
-                        )
+                        response = await handle_write(message, config, config_path, native_call(envelope(message)))
                     except OSError as error:
                         response = tool_response(
                             message, f"Approval gate could not process bm_write: {error}", is_error=True
                         )
                     if "result" in response:
-                        emit(response)
+                        await emit(response)
                     else:
-                        send_native(response)
-        except (BrokenPipeError, ValueError, OSError) as error:
+                        await client.send(response)
+        except (ValueError, OSError) as error:
             warn(f"Client-to-native relay stopped: {error}")
         finally:
             try:
-                native.stdin.close()
+                client.stdin.close()
             except OSError as error:
                 warn(f"Could not close native stdin: {error}")
 
-    def native_to_client() -> None:
-        try:
-            for line in native.stdout:
-                try:
-                    reply = json.loads(line)
-                except json.JSONDecodeError:
-                    reply = None
-                if isinstance(reply, dict) and "method" not in reply:
-                    request_id = reply.get("id")
-                    if isinstance(request_id, str) and request_id.startswith(internal_id_prefix):
-                        with pending_lock:
-                            replies = pending.pop(request_id, None)
-                            if replies is not None:
-                                replies.put_nowait(reply)
-                        continue
-                    result = reply.get("result")
-                    if isinstance(result, dict) and isinstance(result.get("tools"), list):
-                        result["tools"] = [
-                            tool
-                            for tool in result["tools"]
-                            if isinstance(tool, dict) and tool.get("name") in ALLOWED_TOOLS
-                        ]
-                        emit(reply)
-                        continue
-                with _stdout_lock:
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
-        except (ValueError, OSError) as error:
-            warn(f"Native-to-client relay stopped: {error}")
+    async def forward(line: bytes, reply: Any) -> None:
+        if isinstance(reply, dict) and "method" not in reply:
+            result = reply.get("result")
+            if isinstance(result, dict) and isinstance(result.get("tools"), list):
+                result["tools"] = [
+                    tool for tool in result["tools"] if isinstance(tool, dict) and tool.get("name") in ALLOWED_TOOLS
+                ]
+                await emit(reply)
+                return
+        await write_client(line)
 
-    threading.Thread(target=client_to_native, daemon=True).start()
-    threading.Thread(target=native_to_client, daemon=True).start()
-    return native.wait()
+    requests = asyncio.create_task(client_to_native())
+    try:
+        await client.relay(forward)
+    except (ValueError, OSError) as error:
+        warn(f"Native-to-client relay stopped: {error}")
+    status = await native.wait()
+    requests.cancel()
+    return status
+
+
+def run_proxy(config: Config, config_path: Path) -> int:
+    return asyncio.run(_run_proxy(config, config_path))
 
 
 def main(argv: list[str] | None = None) -> int:
