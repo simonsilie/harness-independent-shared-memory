@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from approval_gate.proposals import (
     prepare,
     save_proposal,
 )
-from approval_gate.writes import effective_metadata, temporary_arguments
+from approval_gate.writes import NativeCall, effective_metadata, pin_durable_target, temporary_arguments
 
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
@@ -159,6 +160,104 @@ def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
         "..",
     ):
         assert temporary_arguments(args | {"identifier": target}, call_native) is None, target
+
+
+RESOLVABLE_TARGETS = [
+    ("Team Personal", "temporary/note.md"),
+    ("team-personal", "temporary/note.md"),
+    (PROJECT_ID, "temporary/note.md"),
+    ("personal", "team-personal/temporary/note.md"),
+]
+UNRESOLVABLE_TARGETS = [
+    ("personal", "alpha/temporary/note.md"),
+    ("missing", "temporary/note.md"),
+]
+
+
+@pytest.fixture
+def listing(tmp_path: Path) -> dict[str, Any]:
+    return {
+        "projects": [
+            {
+                "name": "personal",
+                "qualified_name": "Team Personal",
+                "external_id": PROJECT_ID,
+                "source": "local",
+                "local_path": str(tmp_path),
+            },
+            {"name": "alpha", "external_id": OTHER_PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
+        ]
+    }
+
+
+@pytest.fixture
+def call_native(listing: dict[str, Any]) -> NativeCall:
+    return lambda _name, _arguments: listing
+
+
+@pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
+def test_temporary_write_resolves_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = temporary_arguments
+    args = {"content": temporary_content(), "identifier": identifier, "project": project}
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is not None and forwarded["project"] == PROJECT_ID
+
+
+@pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
+def test_temporary_write_with_unresolvable_project_needs_approval(
+    call_native: NativeCall, project: str, identifier: str
+) -> None:
+    sut = temporary_arguments
+    args = {"content": temporary_content(), "identifier": identifier, "project": project}
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is None
+
+
+@pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
+def test_durable_write_resolves_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = pin_durable_target
+    args = {"content": DURABLE, "identifier": identifier, "project": project}
+
+    _, pinned = sut(args, call_native)
+
+    assert pinned["project"] == PROJECT_ID
+
+
+@pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
+def test_durable_write_refuses_unresolvable_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = pin_durable_target
+    args = {"content": DURABLE, "identifier": identifier, "project": project}
+
+    with pytest.raises(ProposalError):
+        sut(args, call_native)
+
+
+def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], call_native: NativeCall) -> None:
+    sut = temporary_arguments
+    listing["constrained_project"] = "personal"
+    args = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is None
+
+
+def test_malformed_native_listing_is_a_visible_tool_error(
+    tmp_path: Path, listing: dict[str, Any], call_native: NativeCall
+) -> None:
+    sut = proxy.handle_write
+    del listing["projects"][0]["external_id"]
+    config = make_config(tmp_path, ["unused"])
+    arguments = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
+    request = {"id": 1, "params": {"name": "bm_write", "arguments": arguments}}
+
+    response = sut(request, config, tmp_path / "config.json", call_native)
+
+    assert response["result"]["isError"]
 
 
 def test_malformed_frontmatter_is_reported():
