@@ -58,7 +58,7 @@ failure has not been established. Polling does not disable semantic indexing.
 
 ## Requirement gap and smallest remedy
 
-[ADR 0007](adr/0007-model-independent-storage-and-text-search.md) requires
+[ADR 0007](../adr/0007-model-independent-storage-and-text-search.md) requires
 storage, text retrieval, startup and background indexing without inference or
 model downloads. A supported instance-wide semantic-disable setting must skip
 provider construction, vector setup and background embedding work while leaving
@@ -72,12 +72,12 @@ until the patched installation below satisfied the complete model-free requireme
 
 ## Local implementation prepared for review
 
-The [semantic-disable patch](../patches/basic-memory-semantic-disable.patch) adds
+The [semantic-disable patch](../../patches/basic-memory-semantic-disable.patch) adds
 `semantic_search_enabled` (default `true`) and the corresponding
 `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED` environment setting. Setting it to `false`
 skips provider construction, vector setup, reranking and background vector sync;
 default retrieval becomes text even when the configured default is hybrid.
-Explicit semantic/hybrid searches are refused. The [patch notes](../patches/README.md)
+Explicit semantic/hybrid searches are refused. The [patch notes](../../patches/README.md)
 describe its scope and reproduction commands.
 
 The isolated patched-package run
@@ -135,7 +135,7 @@ changed; productive activation and verification remain separate roadmap tasks.
 ## Reproducible build verification
 
 A manual patch after every environment rebuild is no longer the only way to get
-that runtime. The [versioned build step](../patches/README.md#reproducible-runtime-build)
+that runtime. The [versioned build step](../../patches/README.md#reproducible-runtime-build)
 produces `basic_memory-1.0.0+semantic.1-py3-none-any.whl` from the wheel pinned in
 `uv.lock` and the same seven-file patch; two builds produced the identical SHA-256
 `c9e847b2306ab4e0484d38e8e96e72c6b8d144760ff176ceec3c705b542efc82`.

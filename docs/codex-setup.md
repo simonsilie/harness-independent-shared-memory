@@ -59,7 +59,7 @@ Run these steps from the memory project root. The evaluation runner explicitly l
 
    Verification checks all 22 actual search modes, returned ID order including irrelevant hits, read provenance, the effective tool inventory, and unchanged corpus bytes. It writes `results.json` and `tool-calls.json` in that run directory. Each invocation gets a separate timestamped directory so reruns preserve earlier evidence. Codex may need permission to start outside a restrictive process sandbox and to use its existing model-provider login; the evaluated thread remains read-only.
 
-Recorded recall, startup, outage, recovery, and compatibility checks are documented in [evaluation results](evaluation-results.md).
+Recorded recall, startup, outage, recovery, and compatibility checks are documented in [evaluation results](archive/evaluation-results.md).
 
 ## Protected real-client probe
 
@@ -67,10 +67,10 @@ Substitute the provisioned service account and its home directory for
 `workflow-service-account` and `/path/to/service-home` in the commands below.
 
 Historical instructions only. Run the commands in this section from the complete
-archived checkout at tag `historical-workflow-20261118`
+archived checkout at commit `fe09180`
 ([source revision](https://github.com/simonsilie/harness-independent-shared-memory/blob/fe09180fac127bcaf48c87fc29b3577c49300e61/docs/codex-setup.md#protected-phase-1b-real-client-probe)),
 not the active tree. Productive clients use native tools, not this protected
-facade; see [the retirement decision](custom-code-decision.md).
+facade; see [the retirement decision](archive/custom-code-decision.md).
 
 The real-client harness supports `--protected-identity`, starting with Codex,
 then OpenCode and Claude Code. It exercises capture, proposal and acceptance
@@ -80,7 +80,7 @@ and consumes only service-owned artifacts bound to this run, fixture and exact
 operation. It never opens the protected database or runs reviewer commands.
 
 For the already provisioned standalone runtime described in the
-[boundary results](evaluation-results.md), refresh code and start a fresh fixture
+[boundary results](archive/evaluation-results.md), refresh code and start a fresh fixture
 from the repository root **in your own terminal**:
 
 ```sh
@@ -151,4 +151,4 @@ reviewer operations remain there. At the restart checkpoint, stop and restart
 this fixture's facade with the printed command before taking the requested
 snapshot. At `verify-final`, stop it before taking the final snapshot. This
 extension proves nothing until its result passes; see the [matrix and cache
-limits](evaluation-results.md#protected-eligibility-probe--16-november-2026).
+limits](archive/evaluation-results.md#protected-eligibility-probe--16-november-2026).

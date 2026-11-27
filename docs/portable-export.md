@@ -31,7 +31,7 @@ Exported files are private (`0600`, directories `0700`), matching the store.
 
 Enumerate the configured projects rather than exporting only the default one; a
 single project's bundle is not the complete store. The `export` command in the
-[`ops` package](../ops/), alongside `backup` and `restore`, does this and writes
+[`ops` package](../ops), alongside `backup` and `restore`, does this and writes
 one `bundles/<project>` directory per configured project:
 
 ```sh

@@ -1,7 +1,7 @@
 # Temporary context and archive behavior
 
 The active shared-client rules are recorded in
-[shared-memory-lifecycle.md](shared-memory-lifecycle.md). They use the existing
+[shared-memory-lifecycle.md](../shared-memory-lifecycle.md). They use the existing
 four native tools and logical archival in place. No daemon, adapter, deletion
 operation or additional dependency is needed. After explicit owner approval,
 the verified addition was activated in the dotfiles shared AGENTS file on
@@ -33,7 +33,7 @@ uv run --locked --no-sync python evaluation/clients/lifecycle.py
 uv run --locked --no-sync python evaluation/clients/lifecycle.py opencode
 ```
 
-The probe reuses [the existing client runners](../evaluation/clients/behavior.py)
+The probe reuses [the existing client runners](../../evaluation/clients/behavior.py)
 with a per-run candidate instruction override. Codex receives the candidate as
 `developer_instructions`; OpenCode loads it through its `instructions` array.
 The installed global instructions and ordinary coding tools remain available.

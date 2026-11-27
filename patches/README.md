@@ -3,7 +3,7 @@
 `basic-memory-semantic-disable.patch` adds `semantic_search_enabled` to the
 installed Basic Memory 1.0.0 source. With explicit owner approval, it was applied
 to the project's `.venv` on 17 November 2026 and verified there with disposable
-data; see [installation evidence and backup](../docs/model-free-operation.md#approved-local-installation).
+data; see [installation evidence and backup](../docs/archive/model-free-operation.md#approved-local-installation).
 The project lockfile now installs the [patched release](https://github.com/simonsilie/harness-independent-shared-memory/releases/tag/basic-memory-semantic.2)
 with its recorded SHA-256.
 
