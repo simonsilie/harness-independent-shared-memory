@@ -210,14 +210,15 @@ class OpenCodeChecks(unittest.TestCase):
             (root / "evaluation/questions.json").write_text("[]")
             (root / "evaluation/opencode/runs").mkdir(parents=True)
             setattr(runner, "ROOT", root)
-            setattr(runner, "OUT", root / "evaluation/opencode/runs/check")
+            out = root / "evaluation/opencode/runs/check"
+            argv = ["--verify-only"] if verify_only else []
 
             def preflight(command, **kwargs):
                 if "api" in command:
                     return subprocess.CompletedProcess(command, 0, "", "")
                 if command[-1] != "Check readiness.":
                     self.assertTrue(captured)
-                    self.assertTrue((runner.OUT / "effective-tools.json").exists())
+                    self.assertTrue((out / "effective-tools.json").exists())
                     return subprocess.CompletedProcess(command, 0, "", "")
                 session = command[command.index("--session") + 1]
                 events = inventory_events()
@@ -229,7 +230,6 @@ class OpenCodeChecks(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1, "", "Preflight stopped")
 
             with (
-                patch.object(sys, "argv", ["run.py"] + (["--verify-only"] if verify_only else [])),
                 patch.object(runner, "versions", return_value={}),
                 patch.object(runner.socket, "socket") as socket,
                 patch.object(runner.socket, "create_connection"),
@@ -243,11 +243,11 @@ class OpenCodeChecks(unittest.TestCase):
                 )
                 server.return_value.poll.return_value = None
                 if captured:
-                    runner.main()
-                    self.assertTrue((runner.OUT / "effective-tools.json").exists())
+                    runner.main(argv, out)
+                    self.assertTrue((out / "effective-tools.json").exists())
                 else:
                     with self.assertRaisesRegex(ValueError, "did not confirm"):
-                        runner.main()
+                        runner.main(argv, out)
                 config = json.loads(server.call_args.kwargs["env"]["OPENCODE_CONFIG_CONTENT"])
                 self.assertEqual(config["plugins"], [{"package": str(root / "evaluation/opencode/eval-capture")}])
                 self.assertEqual(run.call_count, 3 if verify_only or not captured else 4)

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import re
 import sys
@@ -11,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from evaluation.opencode.inventory import ALLOWED_TOOLS, verify_inventory  # noqa: E402
+from evaluation.support import sha256_file  # noqa: E402
 
 OUT = Path(sys.argv[1]).resolve()
 
@@ -45,9 +45,7 @@ afters = {e["callID"]: e for e in plugin_events if e["kind"] == "tool.execute.co
 assert set(befores) == set(afters), "Unpaired tool executions"
 relevant_search = False
 relevant_read = False
-source_revision = (
-    "sha256:" + hashlib.sha256((ROOT / "evaluation/harness-independent-shared-memory.md").read_bytes()).hexdigest()
-)
+source_revision = "sha256:" + sha256_file(ROOT / "evaluation/harness-independent-shared-memory.md")
 for key, call in afters.items():
     assert befores[key]["tool"] == call["tool"], "Mismatched tool execution"
     output = call["result"]["output"]

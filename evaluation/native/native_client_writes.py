@@ -1,6 +1,4 @@
-import hashlib
 import json
-import os
 import socket
 import sqlite3
 import subprocess
@@ -14,6 +12,10 @@ from urllib.parse import urlencode
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from evaluation.support import client_environment, sha256_file  # noqa: E402
+
 OUT = Path(__file__).parent / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-native-writes")
 OUT.mkdir(parents=True)
 logger.info(f"Native client write artifacts: {OUT}")
@@ -31,11 +33,8 @@ for directory in (state, corpus, workspace):
     )
     + "\n"
 )
-before = {
-    str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (ROOT / "evaluation/corpus").rglob("*.md")
-}
-env = {k: v for k, v in os.environ.items() if not k.startswith(("BASIC_MEMORY_", "PHASE1B_"))}
+before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
+env = client_environment("BASIC_MEMORY_", "PHASE1B_")
 env.pop("PYTEST_CURRENT_TEST", None)
 env.update(
     {
@@ -328,10 +327,7 @@ for client, identifier, checksum in (("opencode", "a.md", a), ("codex", "b.md", 
     assert conflict["error"] == "REVISION_CONFLICT", conflict
     assert snapshot() == winning, "Stale write changed the winning database content or file"
 assert "winner_a" in (corpus / "a.md").read_text() and "winner_b" in (corpus / "b.md").read_text()
-assert {
-    str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (ROOT / "evaluation/corpus").rglob("*.md")
-} == before
+assert {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")} == before
 guards = [json.loads(path.read_text()) for path in OUT.glob("*.guard.json")]
 assert len(guards) == 6 and all(not guard["blocked_connections"] for guard in guards)
 assert all(set(guard["blocked_imports"]) <= {"sqlite_vec"} for guard in guards)

@@ -1,16 +1,18 @@
-import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[1]
+if __name__ == "__main__":
+    sys.path.insert(0, str(ROOT.parent))
+from evaluation.support import run_directory, sha256_file  # noqa: E402
+
 MEASURED_RUNS = [
     # The embedding pass requires indexed entities, so it reuses the same store
     # after the search index run; its store_bytes therefore repeat that run.
@@ -22,13 +24,11 @@ MEASURED_RUNS = [
 
 def main(out=None):
     if out is None:
-        out = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        out = run_directory(__file__)
     out.mkdir(parents=True)
     logger.info(f"Indexing-cost artifacts: {out}")
 
-    source_revision = (
-        "sha256:" + hashlib.sha256((ROOT / "harness-independent-shared-memory.md").read_bytes()).hexdigest()
-    )
+    source_revision = "sha256:" + sha256_file(ROOT / "harness-independent-shared-memory.md")
     notes = sorted((ROOT / "corpus").glob("*.md"))
     assert len(notes) == 20
     corpus = out / "corpus"
@@ -42,8 +42,8 @@ def main(out=None):
         )
         assert metadata["review_status"] == "accepted" and metadata["source_revision"] == source_revision, path
         shutil.copyfile(path, corpus / path.name)
-        hashes[path.name] = hashlib.sha256((corpus / path.name).read_bytes()).hexdigest()
-    assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in corpus.glob("*.md")} == hashes
+        hashes[path.name] = sha256_file(corpus / path.name)
+    assert {p.name: sha256_file(p) for p in corpus.glob("*.md")} == hashes
     (out / "corpus-hashes.json").write_text(json.dumps(hashes, indent=2) + "\n")
 
     version = subprocess.run(
@@ -132,8 +132,8 @@ def main(out=None):
     assert search.returncode == 0, search.stderr
     returned = len(json.loads(search.stdout)["results"])
     assert returned == 20, f"Text search returned {returned} notes after indexing"
-    assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in corpus.glob("*.md")} == hashes
-    assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in notes} == hashes
+    assert {p.name: sha256_file(p) for p in corpus.glob("*.md")} == hashes
+    assert {p.name: sha256_file(p) for p in notes} == hashes
 
     summary = {
         "notes": len(notes),

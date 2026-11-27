@@ -1,4 +1,3 @@
-import hashlib
 import json
 import re
 import statistics
@@ -14,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from evaluation.opencode.inventory import ALLOWED_TOOLS, verify_inventory  # noqa: E402
+from evaluation.support import sha256_file  # noqa: E402
 
 OUT = Path(sys.argv[1]).resolve()
 
@@ -85,9 +85,7 @@ latencies = [call["latency_ms"] for call in calls if call["tool"] == "basic_memo
 
 # Corpus provenance: stable IDs and accepted source revisions.
 notes = {}
-source_revision = (
-    "sha256:" + hashlib.sha256((ROOT / "evaluation/harness-independent-shared-memory.md").read_bytes()).hexdigest()
-)
+source_revision = "sha256:" + sha256_file(ROOT / "evaluation/harness-independent-shared-memory.md")
 for path in (ROOT / "evaluation/corpus").glob("*.md"):
     metadata = dict(
         (key, json.loads(value))
