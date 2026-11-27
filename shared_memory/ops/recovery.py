@@ -14,6 +14,8 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from basic_memory.runtime.storage import runtime_file_path_is_markdown_note
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -139,9 +141,12 @@ def validate_notes(root: Path, *, destination: Path | None = None) -> None:
                 path = contained(project_root, project_root / note["file_path"])
                 if digest(path) != note["db_checksum"] or path.read_bytes() != note["markdown_content"].encode():
                     raise ValueError(f"File/database mismatch: {path}")
-            if {str(p.relative_to(project_root)) for p in project_root.rglob("*.md")} != {
-                n["file_path"] for n in notes
-            }:
+            markdown_paths = {
+                path.relative_to(project_root).as_posix()
+                for path in project_root.rglob("*")
+                if runtime_file_path_is_markdown_note(path.name) and path.is_file()
+            }
+            if markdown_paths != {note["file_path"] for note in notes}:
                 raise ValueError(f"Unindexed or missing Markdown in {project['name']}")
 
 
