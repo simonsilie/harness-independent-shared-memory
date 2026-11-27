@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import shutil
@@ -17,6 +16,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from evaluation.support import client_environment, sha256_file  # noqa: E402
+
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
 logger.info(f"Native MCP/watcher probe artifacts: {OUT}")
@@ -28,10 +31,7 @@ else:
     assert installed_version == expected_version
 installed = "--installed-semantic-disabled" in sys.argv
 semantic_disabled = installed or "--semantic-disabled" in sys.argv
-before = {
-    str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (ROOT / "evaluation/corpus").rglob("*.md")
-}
+before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
 state = OUT / "state"
 corpus = OUT / "corpus"
 state.mkdir(mode=0o700)
@@ -55,7 +55,7 @@ corpus.mkdir()
 # Do not inherit another deployment's routing, credentials or test-mode overrides.
 # Unlike the CLI probe, BASIC_MEMORY_DEFAULT_SEARCH_TYPE stays unset: the default
 # search mode must fall back to text on its own when semantic search is unavailable.
-env = {k: v for k, v in os.environ.items() if not k.startswith(("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_"))}
+env = client_environment("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_")
 env.pop("PYTEST_CURRENT_TEST", None)
 if installed:
     env.pop("PYTHONPATH", None)
@@ -297,10 +297,7 @@ if semantic_disabled:
 else:
     assert "sqlite_vec" in guards["server-1"]["blocked_imports"], "the sqlite-vec control was not exercised"
 assert not any(p.is_file() for p in (OUT / "models").rglob("*")), "the server downloaded embedding models"
-assert {
-    str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (ROOT / "evaluation/corpus").rglob("*.md")
-} == before
+assert {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")} == before
 if installed:
     assert all(
         Path(guard["basic_memory_source"]).resolve() == Path(basic_memory.__file__).resolve()

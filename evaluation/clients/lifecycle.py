@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -13,12 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]
 if __name__ == "__main__":
     sys.path.insert(0, str(ROOT))
 from evaluation.clients import behavior as b  # noqa: E402
+from evaluation.support import run_directory, sha256_file  # noqa: E402
 
 INSTRUCTIONS = ROOT / "docs/shared-memory-lifecycle.md"
 
 
 def snapshot(root):
-    return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob("*.md")}
+    return {str(p): sha256_file(p) for p in root.rglob("*.md")}
 
 
 def note(env, identifier):
@@ -130,7 +130,7 @@ def verify_updates(turns, env, started, now):
 
 async def main(out=None, clients=None):
     if out is None:
-        out = Path(__file__).parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        out = run_directory(__file__)
     out.mkdir(mode=0o700, parents=True)
     now = datetime.now(timezone.utc)
     logger.info(f"Lifecycle evidence: {out}")

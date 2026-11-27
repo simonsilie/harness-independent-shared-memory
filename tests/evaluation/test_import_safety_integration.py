@@ -21,7 +21,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.parametrize(
     "module",
-    ["evaluation.clients.behavior", "evaluation.clients.lifecycle", "evaluation.indexing_cost.run"],
+    [
+        "evaluation.clients.behavior",
+        "evaluation.clients.lifecycle",
+        "evaluation.indexing_cost.run",
+        "evaluation.claude.run",
+        "evaluation.codex.run",
+        "evaluation.opencode.run",
+        "evaluation.recovery.run",
+        "evaluation.evidence.run",
+    ],
 )
 def test_import_has_no_filesystem_process_or_umask_side_effects(module, tmp_path):
     script = """

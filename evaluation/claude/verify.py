@@ -1,4 +1,3 @@
-import hashlib
 import json
 import re
 import sys
@@ -8,6 +7,10 @@ from pathlib import Path
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from evaluation.support import sha256_file  # noqa: E402
+
 OUT = Path(sys.argv[1]).resolve()
 STARTUP = "--startup" in sys.argv[2:]
 ALLOWED_TOOLS = {"mcp__basic_memory__bm_search", "mcp__basic_memory__bm_read"}
@@ -50,9 +53,7 @@ assert all(use["name"] in ALLOWED_TOOLS for use in uses.values()), "Tool outside
 assert not any(result.get("is_error") for result in results.values()), "Tool errors occurred"
 
 notes = {}
-source_revision = (
-    "sha256:" + hashlib.sha256((ROOT / "evaluation/harness-independent-shared-memory.md").read_bytes()).hexdigest()
-)
+source_revision = "sha256:" + sha256_file(ROOT / "evaluation/harness-independent-shared-memory.md")
 for path in (ROOT / "evaluation/corpus").glob("*.md"):
     metadata = frontmatter(path.read_text())
     assert metadata["review_status"] == "accepted" and metadata["source_revision"] == source_revision, path

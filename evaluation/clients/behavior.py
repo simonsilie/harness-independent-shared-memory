@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import socket
 import subprocess
 import sys
@@ -15,6 +14,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
+if __name__ == "__main__":
+    sys.path.insert(0, str(ROOT))
+from evaluation import support  # noqa: E402
+
 SERVER = [str(Path(sys.executable).with_name("basic-memory")), "mcp", "--transport", "stdio"]
 PROMPTS = (
     "Antworte nur mit bereit.",
@@ -26,7 +29,7 @@ PROMPTS = (
 
 
 def client_environment():
-    return {k: v for k, v in os.environ.items() if not k.startswith(("BASIC_MEMORY_", "OPENCODE_CONFIG"))}
+    return support.client_environment("BASIC_MEMORY_", "OPENCODE_CONFIG")
 
 
 def dump(out, name, value):
@@ -301,7 +304,7 @@ def opencode(env, out, prompts, outage=False, instructions=None):
 
 def main(out=None, prompts=PROMPTS):
     if out is None:
-        out = Path(__file__).parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        out = support.run_directory(__file__)
     out.mkdir(mode=0o700, parents=True)
     logger.info(f"Behavior evidence: {out}")
     for client, run in (

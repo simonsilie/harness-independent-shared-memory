@@ -1,4 +1,3 @@
-import hashlib
 import json
 import sys
 from collections import defaultdict, deque
@@ -7,6 +6,10 @@ from pathlib import Path
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from evaluation.support import sha256_file  # noqa: E402
+
 OUT = Path(sys.argv[1]).resolve()
 events = [json.loads(line)["message"] for line in (OUT / "events.jsonl").read_text().splitlines()]
 assert any(e.get("method") == "turn/completed" and e["params"]["turn"]["status"] == "completed" for e in events)
@@ -32,9 +35,7 @@ assert {t["name"] for s in inventory["data"] for t in s["tools"].values()} == {
 assert all(s.get("runtimeStatus") == "connected" and not s.get("toolsError") for s in inventory["data"])
 
 notes = {}
-source_revision = (
-    "sha256:" + hashlib.sha256((ROOT / "evaluation/harness-independent-shared-memory.md").read_bytes()).hexdigest()
-)
+source_revision = "sha256:" + sha256_file(ROOT / "evaluation/harness-independent-shared-memory.md")
 for path in (ROOT / "evaluation/corpus").glob("*.md"):
     metadata = dict(
         (key, json.loads(value))

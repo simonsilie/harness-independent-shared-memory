@@ -1,7 +1,5 @@
 import asyncio
-import hashlib
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -13,6 +11,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from evaluation.support import client_environment, sha256_file  # noqa: E402
+
 OUT = Path(__file__).parent / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-native-coverage")
 OUT.mkdir(parents=True)
 logger.info(f"Native memory coverage artifacts: {OUT}")
@@ -33,7 +35,7 @@ for directory in projects.values():
     )
     + "\n"
 )
-env = {k: v for k, v in os.environ.items() if not k.startswith(("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_"))}
+env = client_environment("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_")
 env.pop("PYTEST_CURRENT_TEST", None)
 env.update(
     {
@@ -53,11 +55,7 @@ GUARD = Path(__file__).with_name("mcp_server_guard.py")
 
 
 def snapshot(directory):
-    return {
-        str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
-        for p in directory.rglob("*")
-        if p.is_file()
-    }
+    return {str(p.relative_to(directory)): sha256_file(p) for p in directory.rglob("*") if p.is_file()}
 
 
 def dump(name, payload):
