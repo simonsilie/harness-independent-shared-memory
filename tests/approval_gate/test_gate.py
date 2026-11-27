@@ -21,7 +21,7 @@ from approval_gate.proposals import (
     prepare,
     save_proposal,
 )
-from approval_gate.writes import effective_metadata, temporary_arguments
+from approval_gate.writes import effective_metadata, pin_durable_target, temporary_arguments
 
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
@@ -159,6 +159,52 @@ def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
         "..",
     ):
         assert temporary_arguments(args | {"identifier": target}, call_native) is None, target
+
+
+@pytest.mark.parametrize(
+    ("project", "identifier", "expected"),
+    [
+        ("Team Personal", "temporary/note.md", PROJECT_ID),
+        ("team-personal", "temporary/note.md", PROJECT_ID),
+        (PROJECT_ID, "temporary/note.md", PROJECT_ID),
+        ("personal", "team-personal/temporary/note.md", PROJECT_ID),
+        ("personal", "alpha/temporary/note.md", None),
+        ("missing", "temporary/note.md", None),
+    ],
+)
+def test_temporary_and_durable_writes_resolve_projects_alike(tmp_path, project, identifier, expected):
+    listing = {
+        "projects": [
+            {
+                "name": "personal",
+                "qualified_name": "Team Personal",
+                "external_id": PROJECT_ID,
+                "source": "local",
+                "local_path": str(tmp_path),
+            },
+            {"name": "alpha", "external_id": OTHER_PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
+        ]
+    }
+    args = {"content": temporary_content(), "identifier": identifier, "project": project}
+    temporary = temporary_arguments(args, lambda _name, _arguments: listing)
+    assert (temporary or {}).get("project") == expected
+    if expected is None:
+        with pytest.raises(ProposalError):
+            pin_durable_target(args, lambda _name, _arguments: listing)
+    else:
+        assert pin_durable_target(args, lambda _name, _arguments: listing)[1]["project"] == expected
+
+
+def test_constrained_session_blocks_temporary_writes(tmp_path):
+    listing = {
+        "constrained_project": "personal",
+        "projects": [
+            {"name": "personal", "external_id": PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
+            {"name": "alpha", "external_id": OTHER_PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
+        ],
+    }
+    args = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
+    assert temporary_arguments(args, lambda _name, _arguments: listing) is None
 
 
 def test_malformed_frontmatter_is_reported():
