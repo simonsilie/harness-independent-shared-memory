@@ -95,14 +95,14 @@ def expired(proposal: dict[str, Any], *, now: datetime | None = None) -> bool:
     return (now or datetime.now(timezone.utc)) >= deadline
 
 
-def create_or_reuse(
+async def create_or_reuse(
     config: Config, arguments: dict[str, Any], call_native: NativeCall, *, now: datetime | None = None
 ) -> tuple[dict[str, Any], bool]:
     """Bind a durable write to a proposal, reusing an identical open one."""
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ProposalError("A durable write requires string content.")
-    project, arguments = pin_durable_target(arguments, call_native)
+    project, arguments = await pin_durable_target(arguments, call_native)
     payload = json.dumps(arguments, sort_keys=True)
     digest = content_hash(content)
     source = effective_metadata(arguments).get("source")
