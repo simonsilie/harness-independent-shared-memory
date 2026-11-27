@@ -244,3 +244,45 @@ def test_temporary_handover_lifecycle_uses_the_proxy(proxy):
             assert len(list_proposals(config)) == 2
 
     asyncio.run(verify())
+
+
+def test_durable_write_from_a_modern_protocol_client(proxy):
+    root, config, parameters = proxy
+    target = root / "notes/personal/durable/decision.md"
+    meta = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "bm_write",
+            "arguments": {"content": DURABLE, "project": "personal", "identifier": "durable/decision"},
+            "_meta": meta,
+        },
+    }
+    child = subprocess.Popen(
+        [parameters.command, *parameters.args],
+        cwd=parameters.cwd,
+        env=get_default_environment() | parameters.env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdin is not None and child.stdout is not None
+        child.stdin.write(json.dumps(request) + "\n")
+        child.stdin.flush()
+        reply = asyncio.run(asyncio.wait_for(asyncio.to_thread(child.stdout.readline), timeout=60))
+    finally:
+        child.kill()
+        child.wait(timeout=10)
+
+    result = json.loads(reply)["result"]
+    assert result["resultType"] == "complete"
+    assert not result["isError"], result["content"]
+    (proposal,) = list_proposals(config)
+    assert result["structuredContent"]["result"]["proposal_id"] == proposal["id"]
+    assert not target.exists()
