@@ -246,6 +246,20 @@ def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], ca
     assert forwarded is None
 
 
+def test_malformed_native_listing_is_a_visible_tool_error(
+    tmp_path: Path, listing: dict[str, Any], call_native: NativeCall
+) -> None:
+    sut = proxy.handle_write
+    del listing["projects"][0]["external_id"]
+    config = make_config(tmp_path, ["unused"])
+    arguments = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
+    request = {"id": 1, "params": {"name": "bm_write", "arguments": arguments}}
+
+    response = sut(request, config, tmp_path / "config.json", call_native)
+
+    assert response["result"]["isError"]
+
+
 def test_malformed_frontmatter_is_reported():
     with pytest.raises(ProposalError, match="Malformed note frontmatter"):
         effective_metadata({"content": "---\ntitle: [unclosed\n---\nbody"})

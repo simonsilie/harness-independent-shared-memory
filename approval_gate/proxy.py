@@ -50,9 +50,11 @@ def handle_write(request: dict[str, Any], config: Config, config_path: Path, cal
         if temporary is not None:
             return {**request, "params": {**request["params"], "arguments": temporary}}
         proposal, created = create_or_reuse(config, arguments, call_native)
-    except ProposalError as error:
-        audit(config, "write_refused", reason=str(error), id=request.get("id"))
-        return tool_response(request, str(error), is_error=True)
+    except (ProposalError, LookupError, ValueError) as error:
+        # A malformed native reply must not escape and stop the client relay thread.
+        reason = str(error) if isinstance(error, ProposalError) else f"Unexpected native response: {error!r}"
+        audit(config, "write_refused", reason=reason, id=request.get("id"))
+        return tool_response(request, reason, is_error=True)
     if request.get("id") is None:
         audit(config, "unidentified_write_refused", proposal_id=proposal["id"])
         return tool_response(request, f"Proposal {proposal['id']} created; send a request with an id to see it", True)
