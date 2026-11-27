@@ -81,7 +81,7 @@ the existing rules take precedence.
 A project-local `basic_memory` entry can override the global launcher. Check
 which entry applies in the project where you will use the gate, and update that
 entry if needed. After saving, restart Codex or reload OpenCode. Then
-[verify the gate in a disposable project](docs/client-connections.md#configuration-and-ownership):
+[verify the gate in a disposable project](docs/client-connections.md#configuration):
 a synthetic durable write should return a proposal without creating the note
 while approval is pending.
 
@@ -128,5 +128,5 @@ updates and temporary handovers.
 
 To connect directly, use the template's `native_command` and `env` as the
 client command and environment and keep the same client tool permissions.
-For Toolbox setups, see
-[how to select the launcher](docs/client-connections.md#configuration-and-ownership).
+For launchers kept in a dotfiles repository, see
+[how to select the launcher](docs/client-connections.md#optional-dotfiles-launchers).

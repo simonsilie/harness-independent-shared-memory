@@ -1,6 +1,6 @@
 # Automatic lightweight observations
 
-Activated in the common toolbox AGENTS file for Codex and OpenCode on
+Activated in the common dotfiles AGENTS file for Codex and OpenCode on
 18 November 2026 after explicit owner approval. The productive log is outside
 repositories. These instructions implement [ADR 0012](adr/0012-automatic-lightweight-handover-observations.md)
 using existing Python and filesystem tools; no installed writer or hook is needed.

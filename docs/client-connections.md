@@ -3,16 +3,38 @@
 The client launchers use the native Basic Memory service and the external store
 at `$HOME/SharedMemory`. The historical corpus remains separate.
 
-## Configuration and ownership
+## Configuration
 
-Reusable client behavior belongs in the toolbox repository. The active files are:
+This checkout is all a client connection needs. Follow the
+[quick start](../README.md#quick-start): run `uv sync --locked`, create the
+store with `./init-store.sh`, copy `approval_gate/config.example.json` to
+`approval_gate/config.json` and generate each client's entry with the
+[snippet generator](../README.md#generate-codex-and-opencode-snippets). For a
+direct connection without the gate, use the template's `native_command` and
+`env` as the client command and environment. Verify the proxy against
+disposable stores with
+`uv run --locked --no-sync pytest -m integration tests/approval_gate`.
+
+Check the effective server entry, including any project-local override, to see
+which command a client will use. Switching productive clients between the gate
+and a direct connection requires explicit owner approval. After a switch,
+restart each affected client and check that `bm_project` with `command="list"`
+returns the expected projects. To verify the gate, propose a synthetic durable
+note in a disposable project. Check that the client receives a proposal and the
+note is absent while approval is pending.
+
+## Optional dotfiles launchers
+
+Launchers and shared client instructions can live in a personal dotfiles
+repository, shown here as `/path/to/dotfiles`. Other setups do not need it. The
+files are:
 
 | File | Purpose |
 | --- | --- |
-| `$HOME/toolbox/bin/shared-memory-mcp` | Shared launcher for the patched project environment and external configuration |
-| `$HOME/toolbox/dotfiles/agents/AGENTS.md` | One set of recall, project-scope, source, approval and conflict instructions, already linked to both clients |
-| `$HOME/toolbox/dotfiles/opencode/opencode.jsonc` | Global OpenCode connection and tool permissions, linked from `~/.config/opencode/opencode.jsonc` |
-| `$HOME/toolbox/dotfiles/codex/shared-memory.toml` | Mergeable Codex server template; replace its absolute-path placeholder before use |
+| `/path/to/dotfiles/bin/shared-memory-mcp` | Shared launcher for the patched project environment and external configuration |
+| `/path/to/dotfiles/agents/AGENTS.md` | One set of recall, project-scope, source, approval and conflict instructions, already linked to both clients |
+| `/path/to/dotfiles/opencode/opencode.jsonc` | Global OpenCode connection and tool permissions, linked from `~/.config/opencode/opencode.jsonc` |
+| `/path/to/dotfiles/codex/shared-memory.toml` | Mergeable Codex server template; replace its absolute-path placeholder before use |
 | `$CODEX_HOME/config.toml`, normally `~/.codex/config.toml` | Actual Codex connection, merged without replacing unrelated machine settings |
 
 The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
@@ -20,33 +42,21 @@ The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
 refuses an unpatched runtime before native startup. It forces local routing,
 semantic search off, automatic updates and Logfire off, polling-based file
 watching and private file permissions. Moving the checkout requires adjusting
-the launcher. Run `uv sync --locked` from the root of this shared-memory
-repository to install the patched runtime and gate dependencies.
+the launcher.
 
-Toolbox checkouts with `bin/shared-memory-approval-gate` and
-`dotfiles/shared-memory/approval-gate.json` can use the
+Dotfiles repositories with `bin/shared-memory-approval-gate` and
+`shared-memory/approval-gate.json` can use the
 [durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
 The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server. From the same shared-memory checkout, verify the proxy against
-disposable stores with
-`uv run --locked --no-sync pytest -m integration tests/approval_gate`.
-
-Check the effective server entry, including any project-local override, to see
-which launcher a client will use.
+native server.
 
 With explicit owner approval, select the launcher in each client's
 `basic_memory` server entry. Use `bin/shared-memory-approval-gate` for terminal
-approval or `bin/shared-memory-mcp` for chat approval. Supply the absolute Toolbox
+approval or `bin/shared-memory-mcp` for chat approval. Supply the absolute dotfiles
 path in Codex and use the existing `{env:HOME}` substitution in OpenCode. The
-Toolbox wrappers take no MCP arguments from the client. Preserve the client tool
-permissions and restart each affected client. Check that `bm_project` with
-`command="list"` returns the expected projects. To verify the gate, propose a
-synthetic durable note in a disposable project. Check that the client receives a
-proposal and the note is absent while approval is pending. To restore the
-previous mode, select its launcher again and restart the client.
-
-For setups without the Toolbox gate wrapper and configuration, use the
-[checkout snippet generator](../README.md#generate-codex-and-opencode-snippets).
+dotfiles wrappers take no MCP arguments from the client. Preserve the client tool
+permissions, restart each affected client and verify it as described above. To
+restore the previous mode, select its launcher again and restart the client.
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).
@@ -55,6 +65,15 @@ Codex receives the resolved absolute launcher path. Its server is optional
 approval mode remains `approve`, preserving the existing client behavior.
 Direct connections apply the chat convention described below. Connections through
 the gate require terminal approval for durable writes.
+
+Existing dotfiles edits were preserved. `bin/link-dotfiles opencode codex`
+confirmed the existing links. Previous client configurations and dotfiles source
+files are retained under `.state/client-setup/backup-20261117T170647.993230Z/` in
+this checkout, including a target manifest. No commit was created in either repo.
+Memory content, SQLite state and model caches stay outside the dotfiles repository and Git;
+the complete machine-specific Codex config remains untracked there.
+
+## Tool surface and instructions
 
 Both clients expose exactly these Basic Memory tools for ordinary sessions:
 `bm_project`, `bm_search`, `bm_read`, `bm_write`. Native checksum-conditional
@@ -75,13 +94,6 @@ The gate enforces terminal approval on its MCP write path.
 Seven-day inactivity and archive rules are caller responsibilities. The
 [verified lifecycle addition](temporary-context.md) is now activated in the
 shared AGENTS file.
-
-Existing toolbox edits were preserved. `bin/link-dotfiles opencode codex`
-confirmed the existing links. Previous client configurations and toolbox source
-files are retained under `.state/client-setup/backup-20261117T170647.993230Z/` in
-this checkout, including a target manifest. No commit was created in either repo.
-Memory content, SQLite state and model caches stay outside toolbox and Git;
-the complete machine-specific Codex config remains untracked there.
 
 ## Verification on 17 November 2026
 
@@ -107,14 +119,14 @@ projects, searched and read the temporary notes in response to an ordinary statu
 question without a reminder to consult memory. OpenCode's request inventory
 contained the four permitted memory tools alongside its normal coding tools;
 the shared instructions were present. Codex's live `mcpServerStatus/list` returned
-exactly those four tools in both this checkout and the toolbox checkout. The
+exactly those four tools in both this checkout and the dotfiles checkout. The
 historical corpus was unchanged and the temporary notes were removed using native
 checksum-guarded deletion.
 
-A separate OpenCode global check from the toolbox checkout, with no project-local
+A separate OpenCode global check from the dotfiles checkout, with no project-local
 MCP override, verified the expanded launcher path and a connected live MCP server.
 Evidence is retained alongside the first run in `opencode-global-*.json` and the
-global readiness transcript. The toolbox's existing permission and linking checks
+global readiness transcript. The dotfiles repository's existing permission and linking checks
 passed: 73 tests and 131 subtests. The launcher passed `bash -n`.
 
 These initial checks establish connection, actual tool exposure and startup

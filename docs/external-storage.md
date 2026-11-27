@@ -5,7 +5,7 @@ The storage layout was created and activated on 17 November 2026 under
 The native SQLite database is initialized with both prepared projects and
 `semantic_search_enabled=false` using the [installed model-free patch](model-free-operation.md#approved-local-installation).
 This is the designated productive store. [Codex and OpenCode now connect](client-connections.md)
-through the shared toolbox launcher; their historical corpus connections have
+through the shared dotfiles launcher; their historical corpus connections have
 been replaced in both global and active project configuration.
 
 ## Actual layout
