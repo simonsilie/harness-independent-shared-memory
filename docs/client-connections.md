@@ -9,9 +9,7 @@ This checkout is all a client connection needs. Follow the
 [quick start](../README.md#quick-start): run `uv sync --locked`, create the
 store with `./init-store.sh`, copy `approval_gate/config.example.json` to
 `approval_gate/config.json` and generate each client's entry with the
-[snippet generator](../README.md#generate-codex-and-opencode-snippets). For a
-direct connection without the gate, use the template's `native_command` and
-`env` as the client command and environment. Verify the proxy against
+[snippet generator](../README.md#generate-codex-and-opencode-snippets). Verify the proxy against
 disposable stores with
 `uv run --locked --no-sync pytest -m integration tests/approval_gate`.
 
@@ -23,40 +21,36 @@ returns the expected projects. To verify the gate, propose a synthetic durable
 note in a disposable project. Check that the client receives a proposal and the
 note is absent while approval is pending.
 
-## Optional dotfiles launchers
+## Launchers
 
-Launchers and shared client instructions can live in a personal dotfiles
+`uv sync --locked` installs two commands into the checkout's `.venv/bin`.
+`shared-memory-approval-gate` starts the gate in front of the native server and
+requires terminal approval for durable writes; the snippet generator uses it.
+`shared-memory-mcp` starts the native server directly, for chat approval. Both
+read `approval_gate/config.json`, or the file given with `--config` or
+`SHARED_MEMORY_APPROVAL_CONFIG`, and take no MCP arguments from the client.
+They set private file permissions and refuse to start when the store
+configuration is missing or the runtime lacks the semantic-disable patch. They
+force local routing, semantic search, automatic updates and Logfire off and
+polling-based file watching, overriding the configured environment.
+
+With explicit owner approval, select the command in each client's
+`basic_memory` server entry. Preserve the client tool permissions, restart each
+affected client and verify it as described above. To restore the previous
+mode, select the other command again and restart the client.
+
+## Optional dotfiles configuration
+
+Client configuration and shared instructions can live in a personal dotfiles
 repository, shown here as `/path/to/dotfiles`. Other setups do not need it. The
 files are:
 
 | File | Purpose |
 | --- | --- |
-| `/path/to/dotfiles/bin/shared-memory-mcp` | Shared launcher for the patched project environment and external configuration |
 | `/path/to/dotfiles/agents/AGENTS.md` | One set of recall, project-scope, source, approval and conflict instructions, already linked to both clients |
 | `/path/to/dotfiles/opencode/opencode.jsonc` | Global OpenCode connection and tool permissions, linked from `~/.config/opencode/opencode.jsonc` |
 | `/path/to/dotfiles/codex/shared-memory.toml` | Mergeable Codex server template; replace its absolute-path placeholder before use |
 | `$CODEX_HOME/config.toml`, normally `~/.codex/config.toml` | Actual Codex connection, merged without replacing unrelated machine settings |
-
-The launcher uses `$HOME/Projects/harness-independent-shared-memory/.venv` and
-`$HOME/SharedMemory/state`. It requires the installed semantic-disable patch and
-refuses an unpatched runtime before native startup. It forces local routing,
-semantic search off, automatic updates and Logfire off, polling-based file
-watching and private file permissions. Moving the checkout requires adjusting
-the launcher.
-
-Dotfiles repositories with `bin/shared-memory-approval-gate` and
-`shared-memory/approval-gate.json` can use the
-[durable-write approval gate](adr/0013-technical-approval-for-durable-writes.md).
-The gate uses the same environment and runs `bin/shared-memory-mcp` as its
-native server.
-
-With explicit owner approval, select the launcher in each client's
-`basic_memory` server entry. Use `bin/shared-memory-approval-gate` for terminal
-approval or `bin/shared-memory-mcp` for chat approval. Supply the absolute dotfiles
-path in Codex and use the existing `{env:HOME}` substitution in OpenCode. The
-dotfiles wrappers take no MCP arguments from the client. Preserve the client tool
-permissions, restart each affected client and verify it as described above. To
-restore the previous mode, select its launcher again and restart the client.
 
 OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 [configuration substitution](https://opencode.ai/docs/config/#env-vars).

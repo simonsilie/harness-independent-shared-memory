@@ -80,7 +80,8 @@ Keep raw-evidence verification separate from scoring.
 ## Native runtime and verification
 
 The [quickstart](../README.md#connect-your-coding-agent) shows how to enable the
-optional `approval_gate.proxy`, which starts the native Basic Memory server.
+optional `shared-memory-approval-gate` (`approval_gate.proxy`), which starts the
+native Basic Memory server. `shared-memory-mcp` starts that server directly.
 The proxy forwards reads and eligible temporary writes. For a durable write it
 returns a proposal that the owner reviews and confirms with `approval_gate.cli`.
 Direct connections use chat approval. See

@@ -18,6 +18,8 @@ dependencies = [
 
 [project.scripts]
 memory-ops = "ops.__main__:main"
+shared-memory-mcp = "approval_gate.launch:mcp_main"
+shared-memory-approval-gate = "approval_gate.launch:gate_main"
 
 [dependency-groups]
 dev = [

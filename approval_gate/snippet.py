@@ -18,9 +18,7 @@ def render_snippet(client: str, command: Path, checkout: Path, config: Path) -> 
         str(checkout),
         "--locked",
         "--no-sync",
-        "python",
-        "-m",
-        "approval_gate.proxy",
+        "shared-memory-approval-gate",
         "--config",
         str(config),
     ]
