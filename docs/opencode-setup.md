@@ -76,4 +76,4 @@ Run these steps from the memory project root. The runner loads `evaluation/openc
 
    The startup run uses the `memory-startup` agent, whose instructions do not mention memory or retrieval, and asserts the prompt itself contains no such mention. `verify_startup.py` requires paired successful searches and reads, including retrieval and a read of the accepted SQLite safety note at the current source revision. It checks that neither the prompt nor the captured agent instructions mention memory retrieval, and records the effective inventory, executed tools, and response in `startup-result.json`; corpus hashes remain in the run directory.
 
-Recorded recall and startup checks are documented in [evaluation results](evaluation-results.md).
+Recorded recall and startup checks are documented in [evaluation results](archive/evaluation-results.md).

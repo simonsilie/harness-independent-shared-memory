@@ -6,7 +6,7 @@ On 18 November 2026, the actual `$HOME/SharedMemory` store was backed up to
 repositories and indexed note roots. The live store and client configuration
 were unchanged. This implements the local recovery requirement in
 [ADR 0006](adr/0006-local-memory-outside-version-control.md); portable export
-remains a [separate roadmap task](ROADMAP.md).
+is covered separately in [portable export](portable-export.md).
 
 ## Procedure
 
@@ -26,7 +26,7 @@ retention deletion is installed. A copy on the same computer does not protect
 against loss of that computer or its disk.
 
 Backup, restore and [portable export](portable-export.md) are bundled as the
-three stable commands of the [``ops`` package](../ops/). The
+three stable commands of the [``ops`` package](../ops). The
 [implementation](../ops/recovery.py) uses SQLite's online
 backup API, including committed WAL data, rather than copying a live database
 file. It copies all configured local project trees, empty directories, the

@@ -1,14 +1,14 @@
 # Historical everyday-use observation log
 
-This log retains the earlier read-only trial plan and its recorded preparation. Its manual reporting requirements and numerical adoption gate are superseded by the [scope reconciliation](../docs/scope-reconciliation.md) and [automatic lightweight observation decision](../docs/adr/0012-automatic-lightweight-handover-observations.md). New productive observations belong in the external local log during setup, not in this historical template.
+This log retains the earlier read-only trial plan and its recorded preparation. Its manual reporting requirements and numerical adoption gate are superseded by the [scope reconciliation](scope-reconciliation.md) and [automatic lightweight observation decision](../adr/0012-automatic-lightweight-handover-observations.md). New productive observations belong in the external local log during setup, not in this historical template.
 
 **Closed as historical on 18 November 2026.** No qualifying session was recorded
-under these manual rules, and none is now required. [ADR 0011](../docs/adr/0011-real-project-use-with-ongoing-evaluation.md)
+under these manual rules, and none is now required. [ADR 0011](../adr/0011-real-project-use-with-ongoing-evaluation.md)
 replaced the numerical gate with ongoing observation review, and
-[ADR 0012](../docs/adr/0012-automatic-lightweight-handover-observations.md)
+[ADR 0012](../adr/0012-automatic-lightweight-handover-observations.md)
 moved recording to the external JSONL log during real work (see
-[automatic observations](../docs/automatic-observations.md)). The remaining
-roadmap item is the [review of real observations](../docs/ROADMAP.md), not a rerun of
+[automatic observations](automatic-observations.md)). The remaining
+roadmap item is the [review of real observations](ROADMAP.md), not a rerun of
 this template.
 
 ## During normal work
@@ -64,7 +64,7 @@ the live service to manufacture one.
 
 ## Unchanged decision rule
 
-From [architecture section 13](harness-independent-shared-memory.md#13-acceptance-criteria-and-rollout-gates):
+From [architecture section 13](../../evaluation/harness-independent-shared-memory.md#13-acceptance-criteria-and-rollout-gates):
 
 > Global retrieval access is exercised during normal work until the minimum observation is reached: at least 10 recall-relevant work sessions across at least 2 repositories over at least 7 days. Success requires at least 3 documented useful recalls (task, query, note used, avoided investigation, estimated saving), at most 2 missed recalls of accepted content that should have surfaced, fewer false recalls than useful recalls, no retrieval abandoned because of latency (latency recorded per retrieval), and maintenance effort below the documented saved investigation time; discovered wrong accepted entries are corrected or captured as proposals before the evaluation closes. After 10 recall opportunities without a single useful recall, the trial may be judged failed early.
 
@@ -149,12 +149,12 @@ against documented real-work savings; do not silently omit preparation.
 | ID | Date | Task, retrieval and outcome | Savings / latency |
 | --- | --- | --- | --- |
 | P001 | 2026-11-17 | Explicit preparation request. OpenCode searched all projects in text mode for `"Phase 1A" OR "everyday" OR "startup"`; read `main/memory-12.md`, `main/memory-18.md`, `main/memory-19.md` through `bm_read`. Accepted IDs `memory-12`, `memory-18`, `memory-19`, source revision `sha256:109ea610ebdaef9153f888a8aa76be1b45f42bd57061629ee1aafb8ca17f62aa`. Compared with current architecture sections 8/13 and recorded reports; C001 captures the stale single-work-repository interpretation. No startup claim or avoided investigation established. | Savings not claimed; tool latency unavailable in this transcript. Not a qualifying session/opportunity. |
-| P002 | 2026-11-17 06:24:17–06:24:21 UTC | Claude Code 2.1.311, normal discovery in the second work repository, default `claude-opus-5-5`, no startup-wait/model/tool/MCP/settings override and no injected hook. Reused the existing SQLite/two-laptop startup prompt, adding advice-only/no-file-change wording. Init retained ordinary tools but Basic Memory was `pending` with no memory tools; provider returned HTTP 402 before any tool call. Exit 1; no completed advice/recall. Connection outcome and first-turn recall remain unproven, not failed on the basis of `pending`. | Whole invocation 3.664119 s; no retrieval latency or saving. [Invocation](phase1a/runs/20261117-preparation/invocation.json), [raw events](phase1a/runs/20261117-preparation/events.jsonl), [timestamped events](phase1a/runs/20261117-preparation/timed-events.jsonl), [exit](phase1a/runs/20261117-preparation/run-exit.json). |
-| P003 | 2026-11-17 06:31:33–06:31:35 UTC | Codex 0.169.0, global configuration discovered in the second work repository; ephemeral read-only thread with approvals disabled, no model turn or injected instructions/configuration. `mcpServerStatus/list` reported `connected` and exactly `bm_read`, `bm_search`. Retained the previously unarchived kind of global live-inventory evidence, not startup recall. | No retrieval or saving. [Invocation](phase1a/runs/20261117-preparation/codex-invocation.json), [raw timestamped protocol](phase1a/runs/20261117-preparation/codex-events.jsonl), [live inventory/version](phase1a/runs/20261117-preparation/codex-inventory.json). |
+| P002 | 2026-11-17 06:24:17–06:24:21 UTC | Claude Code 2.1.311, normal discovery in the second work repository, default `claude-opus-5-5`, no startup-wait/model/tool/MCP/settings override and no injected hook. Reused the existing SQLite/two-laptop startup prompt, adding advice-only/no-file-change wording. Init retained ordinary tools but Basic Memory was `pending` with no memory tools; provider returned HTTP 402 before any tool call. Exit 1; no completed advice/recall. Connection outcome and first-turn recall remain unproven, not failed on the basis of `pending`. | Whole invocation 3.664119 s; no retrieval latency or saving. [Invocation](../../evaluation/phase1a/runs/20261117-preparation/invocation.json), [raw events](../../evaluation/phase1a/runs/20261117-preparation/events.jsonl), [timestamped events](../../evaluation/phase1a/runs/20261117-preparation/timed-events.jsonl), [exit](../../evaluation/phase1a/runs/20261117-preparation/run-exit.json). |
+| P003 | 2026-11-17 06:31:33–06:31:35 UTC | Codex 0.169.0, global configuration discovered in the second work repository; ephemeral read-only thread with approvals disabled, no model turn or injected instructions/configuration. `mcpServerStatus/list` reported `connected` and exactly `bm_read`, `bm_search`. Retained the previously unarchived kind of global live-inventory evidence, not startup recall. | No retrieval or saving. [Invocation](../../evaluation/phase1a/runs/20261117-preparation/codex-invocation.json), [raw timestamped protocol](../../evaluation/phase1a/runs/20261117-preparation/codex-events.jsonl), [live inventory/version](../../evaluation/phase1a/runs/20261117-preparation/codex-inventory.json). |
 
 P002 was not retried with another model or funded account. Its 180-second
 technical timeout was not reached and is not a new acceptance threshold.
-[Preservation manifests](phase1a/runs/20261117-preparation/preservation.json) confirm all
+[Preservation manifests](../../evaluation/phase1a/runs/20261117-preparation/preservation.json) confirm all
 27 corpus Markdown files and 13,358 pre-existing evidence files unchanged.
 Raw runs are ignored local artifacts; the recorded findings here survive a
 fresh clone.
@@ -164,7 +164,7 @@ fresh clone.
 ### C001 — `memory-18`: distinguish corpus location from work repositories
 
 Discovered during P001; applied on 18 November 2026 as part of the
-[source-revision reconciliation](../docs/source-provenance.md), after the
+[source-revision reconciliation](source-provenance.md), after the
 architecture source itself was clarified. The retained proposal below records
 what P001 observed; the applied wording follows the revised source.
 

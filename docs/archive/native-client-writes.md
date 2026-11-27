@@ -1,6 +1,6 @@
 # Native conditional writes through Codex and OpenCode
 
-This targeted check covers [ADR 0008](adr/0008-concurrent-sessions-with-conflict-detection.md)
+This targeted check covers [ADR 0008](../adr/0008-concurrent-sessions-with-conflict-detection.md)
 using native `bm_read` and `bm_write`, without the workflow facade or a separate
 reviewer identity. Writes are authorized only to disposable fixture notes.
 

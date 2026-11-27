@@ -1,6 +1,6 @@
 # Repository architecture
 
-The [scope reconciliation](scope-reconciliation.md) distinguishes current requirements from the former workflow contract. The [custom-code decision](custom-code-decision.md) records the historical implementation's retirement and the retained native checks.
+The [scope reconciliation](archive/scope-reconciliation.md) distinguishes current requirements from the former workflow contract. The [custom-code decision](archive/custom-code-decision.md) records the historical implementation's retirement and the retained native checks.
 
 The repository uses a flat Python layout with separate runtime, evaluation and
 test packages. Package names describe responsibilities; phase names belong only
@@ -109,10 +109,10 @@ for the lint, type and unit/integration checks.
 
 The complete service, SQLite schema, process-wide acceptance hook, facade,
 reviewer, version-3 bundles, protected probes and their tests are preserved at
-tag `historical-workflow-20261118`, commit
+commit
 [`fe09180fac127bcaf48c87fc29b3577c49300e61`](https://github.com/simonsilie/harness-independent-shared-memory/tree/fe09180fac127bcaf48c87fc29b3577c49300e61).
 They are no longer active packages or CI prerequisites. The archived
 [architecture and transaction contracts](https://github.com/simonsilie/harness-independent-shared-memory/blob/fe09180fac127bcaf48c87fc29b3577c49300e61/docs/repository-architecture.md#workflow-implementation)
 and [design](https://github.com/simonsilie/harness-independent-shared-memory/blob/fe09180fac127bcaf48c87fc29b3577c49300e61/docs/phase-1b-workflow-design.md)
-retain their original details. Follow the [archive reproduction instructions](custom-code-decision.md#historical-reproduction)
+retain their original details. Follow the [archive reproduction instructions](archive/custom-code-decision.md#historical-reproduction)
 only for historical verification, not productive deployment.

@@ -1,9 +1,9 @@
 # Lightweight automatic observations
 
-The [shared client addition](shared-memory-observations.md) is activated for
+The [shared client addition](../shared-memory-observations.md) is activated for
 Codex and OpenCode after explicit owner approval on 18 November 2026, using the external log already reserved at
 `$HOME/SharedMemory/observations/observations.jsonl`. It implements
-[ADR 0012](adr/0012-automatic-lightweight-handover-observations.md) with existing
+[ADR 0012](../adr/0012-automatic-lightweight-handover-observations.md) with existing
 Python standard-library tools and a shared template. No custom writer, software
 installation, dashboard or transcript capture is needed.
 
@@ -99,5 +99,5 @@ records; the real-client check does not manufacture a failed continuation.
 
 ## Productive observations
 
-The [observation review](observation-review.md) records the findings from
+The [observation review](../observation-review.md) records the findings from
 ordinary use. Detailed observation records stay in the local log.

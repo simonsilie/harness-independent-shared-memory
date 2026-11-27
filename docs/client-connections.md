@@ -86,7 +86,7 @@ Durable findings and preferences require presenting concrete content and receivi
 explicit owner approval before saving. Temporary saves need no individual approval.
 The gate enforces terminal approval on its MCP write path.
 Seven-day inactivity and archive rules are caller responsibilities. The
-[verified lifecycle addition](temporary-context.md) is now activated in the
+[verified lifecycle addition](archive/temporary-context.md) is now activated in the
 shared AGENTS file.
 
 ## Verification on 17 November 2026
@@ -182,9 +182,7 @@ The probe installs nothing, leaves its disposable stores and raw transcripts in
 the run directory, and requires inspection of the proposal and outage responses.
 It checks retrieval arguments and the unpredictable token, write-call ordering,
 saved durable content, temporary metadata and successful independent work during
-outage. Client runtime logs/session state use their normal locations. The shared
-behavior roadmap item is complete with these workflow-level limits; this does
-not close the later lifecycle, recovery or observation tasks.
+outage. Client runtime logs/session state use their normal locations.
 
 Restart existing Codex and OpenCode sessions to load the updated configuration
 and instructions. The verification servers have stopped; future client sessions

@@ -1,7 +1,7 @@
 # Corpus provenance and the source revision
 
-The recall corpus is derived from [the architecture proposal](../evaluation/harness-independent-shared-memory.md), whose
-SHA-256 is pinned in [`AUTHORED_SOURCE_REVISION`](../evaluation/recall/prepare.py).
+The recall corpus is derived from [the architecture proposal](../../evaluation/harness-independent-shared-memory.md), whose
+SHA-256 is pinned in [`AUTHORED_SOURCE_REVISION`](../../evaluation/recall/prepare.py).
 On 18 November 2026 the working copy and that pin were reconciled deliberately,
 without regenerating the corpus. This note records the difference, its reviewed
 impact and the limits of the check.
@@ -25,7 +25,7 @@ The only change is one sentence in section 8:
 `git diff 31906b1 HEAD -- harness-independent-shared-memory.md` shows no other
 difference, so sections 1–7 and 9–14 are unchanged since the corpus was accepted.
 The change matches the historic correction proposal
-[C001](../evaluation/observations.md#c001--memory-18-distinguish-corpus-location-from-work-repositories),
+[C001](everyday-use-observations.md#c001--memory-18-distinguish-corpus-location-from-work-repositories),
 which the earlier preparation run captured without altering the corpus.
 
 ## Reviewed impact
@@ -41,7 +41,7 @@ which the earlier preparation run captured without altering the corpus.
 
 The changed sentence cites section 13's everyday-use gate. That gate describes
 the original proposal; current work follows the [roadmap](ROADMAP.md) and
-[ADR 0011](adr/0011-real-project-use-with-ongoing-evaluation.md), as recorded in
+[ADR 0011](../adr/0011-real-project-use-with-ongoing-evaluation.md), as recorded in
 the [scope reconciliation](scope-reconciliation.md). The corpus records the
 architecture's proposal, not current operating instructions.
 

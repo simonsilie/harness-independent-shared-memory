@@ -2,8 +2,8 @@
 
 Historical design only: the former contract is superseded by the ADRs and
 [scope reconciliation](scope-reconciliation.md). The implementation, probes,
-tests and commands below belong to tag `historical-workflow-20261118`,
-commit [`fe09180fac127bcaf48c87fc29b3577c49300e61`](https://github.com/simonsilie/harness-independent-shared-memory/blob/fe09180fac127bcaf48c87fc29b3577c49300e61/docs/phase-1b-workflow-design.md).
+tests and commands below belong to commit
+[`fe09180fac127bcaf48c87fc29b3577c49300e61`](https://github.com/simonsilie/harness-independent-shared-memory/blob/fe09180fac127bcaf48c87fc29b3577c49300e61/docs/phase-1b-workflow-design.md).
 They are not active packages or productive setup instructions; see
 [the retirement decision](custom-code-decision.md).
 
@@ -11,7 +11,7 @@ Contract sketch and data model for the approved Option A: an own workflow servic
 on Basic Memory owns proposals, durable revisions, handovers, retry state and the
 protected reviewer boundary. Direction approved by the owner on 15 November 2026;
 this document is a design for review, not an implementation release. All
-[section 13](../evaluation/harness-independent-shared-memory.md#13-acceptance-criteria-and-rollout-gates)
+[section 13](../../evaluation/harness-independent-shared-memory.md#13-acceptance-criteria-and-rollout-gates)
 The former gates apply unchanged. Baselines: [capability inventory](historical-capability-inventory.md),
 [native probes E4](evaluation-results.md#native-prerequisite-probes--15-november-2026),
 [MCP/watcher probe E5](evaluation-results.md#mcpwatcher-probe--15-november-2026),
@@ -41,7 +41,7 @@ inference.
 
 All tables prefixed `wf_`, created and migrated by the workflow service only.
 Timestamps UTC; JSON columns for structured values. Field names follow
-[section 5](../evaluation/harness-independent-shared-memory.md#5-portable-record-contract).
+[section 5](../../evaluation/harness-independent-shared-memory.md#5-portable-record-contract).
 
 ```text
 wf_project     project_uuid PK; repository_remote; approved_checkouts json;

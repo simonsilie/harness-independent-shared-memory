@@ -29,7 +29,7 @@
 
 Tests live in `tests/`, mirroring the active `ops/`, `build/` and `evaluation/`
 responsibilities. Historical workflow tests are retained only at the archive
-revision documented in [the custom-code decision](custom-code-decision.md).
+revision documented in [the custom-code decision](archive/custom-code-decision.md).
 Pytest uses importlib collection and the repository root as its Python path,
 so tests do not depend on source and test files sharing a directory.
 

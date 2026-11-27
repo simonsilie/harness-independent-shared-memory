@@ -73,4 +73,4 @@ Run these steps from the memory project root. The runner supplies `evaluation/cl
 
    The startup run uses the Codex startup task and instructions, which do not mention memory or retrieval; verification requires a search returning and a read of `memory-20` at the current source revision and writes `startup-result.json`. The outage run substitutes `/usr/bin/false` for the server command in the run's copy of the configuration and stops before a model request. Claude Code has no required-server setting: it reports the server as `failed` with no memory tools and would continue the session without them.
 
-Recorded checks are documented in [evaluation results](evaluation-results.md).
+Recorded checks are documented in [evaluation results](archive/evaluation-results.md).
