@@ -21,9 +21,7 @@ def test_snippet_renders_launcher_and_tool_permissions(client: str) -> None:
         "/example/🚀 check out",
         "--locked",
         "--no-sync",
-        "python",
-        "-m",
-        "approval_gate.proxy",
+        "shared-memory-approval-gate",
         "--config",
         "/example/📁/approval gate.json",
     ]

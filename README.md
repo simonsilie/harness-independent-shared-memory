@@ -94,7 +94,7 @@ replace an existing user-scope `basic_memory` entry, remove it first with
 ```sh
 claude mcp add --scope user --transport stdio basic_memory \
   -- "/path/to/uv" run --directory "/path/to/checkout" --locked --no-sync \
-    python -m approval_gate.proxy --config "/path/to/checkout/approval_gate/config.json"
+    shared-memory-approval-gate --config "/path/to/checkout/approval_gate/config.json"
 ```
 
 To match the tool set above, merge these rules into `~/.claude/settings.json`.
@@ -126,7 +126,6 @@ client to find it. For daily use, give clients the same instructions for
 project-scoped recall, presenting durable-write proposals, checksum-protected
 updates and temporary handovers.
 
-To connect directly, use the template's `native_command` and `env` as the
-client command and environment and keep the same client tool permissions.
-For launchers kept in a dotfiles repository, see
-[how to select the launcher](docs/client-connections.md#optional-dotfiles-launchers).
+To connect directly, replace `shared-memory-approval-gate` with
+`shared-memory-mcp` in the client command and keep the same client tool
+permissions. See [how to select the launcher](docs/client-connections.md#launchers).
