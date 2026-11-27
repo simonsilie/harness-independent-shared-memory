@@ -4,9 +4,9 @@ import os
 from pathlib import Path
 
 import configargparse
-from basic_memory.config_models import BasicMemoryConfig
 
 from . import ProposalError
+from .basic_memory_api import BasicMemoryConfig
 from .config import Config, load_config
 from .proxy import run_proxy
 

@@ -8,10 +8,10 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from basic_memory.utils import resolve_path_within_root
 from loguru import logger
 
 from . import ProposalError
+from .basic_memory_api import resolve_path_within_root
 from .config import Config
 
 REQUEST_TIMEOUT = 20
