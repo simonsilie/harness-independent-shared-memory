@@ -20,6 +20,13 @@ from .proposals import audit, create_or_reuse, prepare
 from .writes import NativeCall, temporary_arguments
 
 _stdout_lock = threading.Lock()
+PROTOCOL_VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
+# MCP 2026-07-28 clients skip initialize and send these keys with every request.
+ENVELOPE_KEYS = (
+    PROTOCOL_VERSION_KEY,
+    "io.modelcontextprotocol/clientCapabilities",
+    "io.modelcontextprotocol/clientInfo",
+)
 
 
 def emit(message: dict[str, Any]) -> None:
@@ -28,12 +35,22 @@ def emit(message: dict[str, Any]) -> None:
         sys.stdout.flush()
 
 
+def envelope(request: dict[str, Any]) -> dict[str, Any]:
+    params = request.get("params")
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    if not isinstance(meta, dict):
+        return {}
+    return {key: meta[key] for key in ENVELOPE_KEYS if key in meta}
+
+
 def tool_response(
     request: dict[str, Any], text: str, is_error: bool = False, proposal_id: str | None = None
 ) -> dict[str, Any]:
     result: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": is_error}
     if proposal_id is not None:
         result["structuredContent"] = {"result": {"proposal_id": proposal_id, "message": text}}
+    if PROTOCOL_VERSION_KEY in envelope(request):
+        result["resultType"] = "complete"
     return {
         "jsonrpc": "2.0",
         "id": request.get("id"),
@@ -93,7 +110,7 @@ def run_proxy(config: Config, config_path: Path) -> int:
         native.stdin.write(json.dumps(message) + "\n")
         native.stdin.flush()
 
-    def call_native(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def call_native(name: str, arguments: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
         request_id = f"{internal_id_prefix}{uuid4().hex}"
         replies: Queue[dict[str, Any]] = Queue(maxsize=1)
         with pending_lock:
@@ -104,7 +121,11 @@ def run_proxy(config: Config, config_path: Path) -> int:
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "method": "tools/call",
-                    "params": {"name": name, "arguments": {**arguments, "output_format": "json"}},
+                    "params": {
+                        "name": name,
+                        "arguments": {**arguments, "output_format": "json"},
+                        **({"_meta": meta} if meta else {}),
+                    },
                 }
             )
             reply = replies.get(timeout=20)
@@ -162,7 +183,10 @@ def run_proxy(config: Config, config_path: Path) -> int:
                         emit(tool_response(message, "Batched bm_write calls are not allowed", is_error=True))
                         continue
                     try:
-                        response = handle_write(message, config, config_path, call_native)
+                        meta = envelope(message)
+                        response = handle_write(
+                            message, config, config_path, lambda name, arguments: call_native(name, arguments, meta)
+                        )
                     except OSError as error:
                         response = tool_response(
                             message, f"Approval gate could not process bm_write: {error}", is_error=True
