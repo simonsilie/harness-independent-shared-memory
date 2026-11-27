@@ -52,7 +52,7 @@ consistently recognize observation opportunities or execute the recipe.
 
 ## Activation on 18 November 2026
 
-Activation added the shared rules to the Toolbox instructions. Both clients
+Activation added the shared rules to the dotfiles instructions. Both clients
 load the same file through their instruction symlinks. Staged copies, manifests
 and read-back evidence stay local.
 

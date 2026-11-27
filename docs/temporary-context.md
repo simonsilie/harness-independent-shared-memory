@@ -4,7 +4,7 @@ The active shared-client rules are recorded in
 [shared-memory-lifecycle.md](shared-memory-lifecycle.md). They use the existing
 four native tools and logical archival in place. No daemon, adapter, deletion
 operation or additional dependency is needed. After explicit owner approval,
-the verified addition was activated in the toolbox shared AGENTS file on
+the verified addition was activated in the dotfiles shared AGENTS file on
 17 November 2026.
 
 ## Rules and activation
