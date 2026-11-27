@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from approval_gate.proposals import (
     prepare,
     save_proposal,
 )
-from approval_gate.writes import effective_metadata, pin_durable_target, temporary_arguments
+from approval_gate.writes import NativeCall, effective_metadata, pin_durable_target, temporary_arguments
 
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
@@ -161,19 +162,21 @@ def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
         assert temporary_arguments(args | {"identifier": target}, call_native) is None, target
 
 
-@pytest.mark.parametrize(
-    ("project", "identifier", "expected"),
-    [
-        ("Team Personal", "temporary/note.md", PROJECT_ID),
-        ("team-personal", "temporary/note.md", PROJECT_ID),
-        (PROJECT_ID, "temporary/note.md", PROJECT_ID),
-        ("personal", "team-personal/temporary/note.md", PROJECT_ID),
-        ("personal", "alpha/temporary/note.md", None),
-        ("missing", "temporary/note.md", None),
-    ],
-)
-def test_temporary_and_durable_writes_resolve_projects_alike(tmp_path, project, identifier, expected):
-    listing = {
+RESOLVABLE_TARGETS = [
+    ("Team Personal", "temporary/note.md"),
+    ("team-personal", "temporary/note.md"),
+    (PROJECT_ID, "temporary/note.md"),
+    ("personal", "team-personal/temporary/note.md"),
+]
+UNRESOLVABLE_TARGETS = [
+    ("personal", "alpha/temporary/note.md"),
+    ("missing", "temporary/note.md"),
+]
+
+
+@pytest.fixture
+def listing(tmp_path: Path) -> dict[str, Any]:
+    return {
         "projects": [
             {
                 "name": "personal",
@@ -185,26 +188,62 @@ def test_temporary_and_durable_writes_resolve_projects_alike(tmp_path, project, 
             {"name": "alpha", "external_id": OTHER_PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
         ]
     }
+
+
+@pytest.fixture
+def call_native(listing: dict[str, Any]) -> NativeCall:
+    return lambda _name, _arguments: listing
+
+
+@pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
+def test_temporary_write_resolves_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = temporary_arguments
     args = {"content": temporary_content(), "identifier": identifier, "project": project}
-    temporary = temporary_arguments(args, lambda _name, _arguments: listing)
-    assert (temporary or {}).get("project") == expected
-    if expected is None:
-        with pytest.raises(ProposalError):
-            pin_durable_target(args, lambda _name, _arguments: listing)
-    else:
-        assert pin_durable_target(args, lambda _name, _arguments: listing)[1]["project"] == expected
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is not None and forwarded["project"] == PROJECT_ID
 
 
-def test_constrained_session_blocks_temporary_writes(tmp_path):
-    listing = {
-        "constrained_project": "personal",
-        "projects": [
-            {"name": "personal", "external_id": PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
-            {"name": "alpha", "external_id": OTHER_PROJECT_ID, "source": "local", "local_path": str(tmp_path)},
-        ],
-    }
+@pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
+def test_temporary_write_with_unresolvable_project_needs_approval(
+    call_native: NativeCall, project: str, identifier: str
+) -> None:
+    sut = temporary_arguments
+    args = {"content": temporary_content(), "identifier": identifier, "project": project}
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is None
+
+
+@pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
+def test_durable_write_resolves_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = pin_durable_target
+    args = {"content": DURABLE, "identifier": identifier, "project": project}
+
+    _, pinned = sut(args, call_native)
+
+    assert pinned["project"] == PROJECT_ID
+
+
+@pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
+def test_durable_write_refuses_unresolvable_project(call_native: NativeCall, project: str, identifier: str) -> None:
+    sut = pin_durable_target
+    args = {"content": DURABLE, "identifier": identifier, "project": project}
+
+    with pytest.raises(ProposalError):
+        sut(args, call_native)
+
+
+def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], call_native: NativeCall) -> None:
+    sut = temporary_arguments
+    listing["constrained_project"] = "personal"
     args = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
-    assert temporary_arguments(args, lambda _name, _arguments: listing) is None
+
+    forwarded = sut(args, call_native)
+
+    assert forwarded is None
 
 
 def test_malformed_frontmatter_is_reported():
