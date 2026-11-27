@@ -8,7 +8,7 @@ from pathlib import Path
 import basic_memory
 import pytest
 
-from build.semantic_runtime import BUILD_REVISION, PATCH, PATCH_ARGS, PROJECT_CREATE_PATCH, package_wheel, verify
+from shared_memory.runtime_build import BUILD_REVISION, PATCH, PATCH_ARGS, PROJECT_CREATE_PATCH, package_wheel, verify
 
 
 def synthetic_wheel(tmp_path: Path) -> Path:

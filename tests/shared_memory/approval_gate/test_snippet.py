@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from approval_gate.snippet import render_snippet
+from shared_memory.approval_gate.snippet import render_snippet
 
 TOOLS = {"bm_project", "bm_read", "bm_search", "bm_write"}
 

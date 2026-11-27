@@ -2,14 +2,15 @@
 
 The [scope reconciliation](archive/scope-reconciliation.md) distinguishes current requirements from the former workflow contract. The [custom-code decision](archive/custom-code-decision.md) records the historical implementation's retirement and the retained native checks.
 
-The repository uses a flat Python layout with separate runtime, evaluation and
-test packages. Package names describe responsibilities; phase names belong only
+The repository keeps its shipped tooling in the `shared_memory` package, beside
+separate evaluation and test packages. Package names describe responsibilities; phase names belong only
 to historical plans and evidence.
 
 ```text
-ops/                         native backup, restore and portable export
-build/semantic_runtime.py    pinned model-free runtime build and verification
-approval_gate/               stdio MCP proxy and owner approval CLI
+shared_memory/
+  ops/                       native backup, restore and portable export
+  approval_gate/             stdio MCP proxy and owner approval CLI
+  runtime_build.py           pinned model-free runtime build and verification
 evaluation/
   bm                         experiment-only Basic Memory launcher
   corpus/                    reviewed experiment notes
@@ -24,8 +25,9 @@ evaluation/
   evidence/                  evidence collection
   observations.md            historical everyday-use observation log
 tests/
-  approval_gate/             proposal, proxy and native approval tests
-  ops/                       recovery and portable-export integration tests
+  shared_memory/
+    approval_gate/           proposal, proxy and native approval tests
+    ops/                     recovery and portable-export integration tests
   evaluation/                harness unit and integration tests
 patches/                     patches for the pinned Basic Memory dependency
 docs/                        setup, architecture, ADRs and recorded evidence
@@ -80,16 +82,16 @@ Keep raw-evidence verification separate from scoring.
 ## Native runtime and verification
 
 The [quickstart](../README.md#connect-your-coding-agent) shows how to enable the
-optional `shared-memory-approval-gate` (`approval_gate.proxy`), which starts the
+optional `shared-memory-approval-gate` (`shared_memory.approval_gate.proxy`), which starts the
 native Basic Memory server. `shared-memory-mcp` starts that server directly.
 The proxy forwards reads and eligible temporary writes. For a durable write it
-returns a proposal that the owner reviews and confirms with `approval_gate.cli`.
+returns a proposal that the owner reviews and confirms with `shared_memory.approval_gate.cli`.
 Direct connections use chat approval. See
 [ADR 0013](adr/0013-technical-approval-for-durable-writes.md) for the write
 policy and the rollout decision.
 
-`ops/` and the evaluation harnesses use the native runtime. `ops/` implements
-backup, restore and OKF export. `build/semantic_runtime.py` builds the patched
+`shared_memory/ops/` and the evaluation harnesses use the native runtime. It implements
+backup, restore and OKF export. `shared_memory/runtime_build.py` builds the patched
 wheel and invokes `evaluation/native/mcp_watcher.py` to verify it.
 
 `evaluation/native/mcp_server_guard.py` blocks inference imports and outbound

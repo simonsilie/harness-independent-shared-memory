@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 from . import ProposalError
 from .config import Config
-from .writes import effective_metadata, pin_durable_target
+from .writes import ProjectListing, effective_metadata, pin_durable_target
 
 
 def prepare(config: Config) -> None:
@@ -96,7 +96,7 @@ def expired(proposal: dict[str, Any], *, now: datetime | None = None) -> bool:
 
 
 def create_or_reuse(
-    config: Config, arguments: dict[str, Any], listing: dict[str, Any], *, now: datetime | None = None
+    config: Config, arguments: dict[str, Any], listing: ProjectListing, *, now: datetime | None = None
 ) -> tuple[dict[str, Any], bool]:
     """Bind a durable write to a proposal, reusing an identical open one."""
     content = arguments.get("content")

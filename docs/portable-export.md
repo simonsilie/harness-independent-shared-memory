@@ -31,7 +31,7 @@ Exported files are private (`0600`, directories `0700`), matching the store.
 
 Enumerate the configured projects rather than exporting only the default one; a
 single project's bundle is not the complete store. The `export` command in the
-[`ops` package](../ops), alongside `backup` and `restore`, does this and writes
+[`ops` package](../shared_memory/ops), alongside `backup` and `restore`, does this and writes
 one `bundles/<project>` directory per configured project:
 
 ```sh
@@ -44,7 +44,7 @@ native `okf export --json` diagnostics appear before it.
 
 Then validate each bundle with `uv run --locked --no-sync basic-memory okf check <bundle> --json` and verify
 the result independently with a generic Markdown/YAML reader. The [integration
-test](../tests/ops/test_export_integration.py) in this repository builds a
+test](../tests/shared_memory/ops/test_export_integration.py) in this repository builds a
 synthetic two-project store with active, expired and archived notes, runs the
 same command and reads the bundles without importing Basic Memory. It runs from
 a fresh checkout and commits no memory content. The earlier one-off script and
@@ -57,7 +57,7 @@ The export verification confirmed that each bundle passed `okf check`, that
 project associations were preserved and that the live store was unchanged.
 Detailed export evidence stays with the local verification run.
 
-The [integration test](../tests/ops/test_export_integration.py) uses disposable
+The [integration test](../tests/shared_memory/ops/test_export_integration.py) uses disposable
 projects with active, expired and archived handovers alongside durable notes.
 The fixture generates activity timestamps relative to execution time and
 verifies that bodies and lifecycle metadata survive in the correct project

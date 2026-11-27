@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from build.semantic_runtime import WATCHER
+from shared_memory.runtime_build import WATCHER
 
 ROOT = Path(__file__).resolve().parents[3]
 

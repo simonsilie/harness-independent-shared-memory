@@ -7,11 +7,11 @@ at `$HOME/SharedMemory`. The historical corpus remains separate.
 
 This checkout is all a client connection needs. Follow the
 [quick start](../README.md#quick-start): run `uv sync --locked`, create the
-store with `./init-store.sh`, copy `approval_gate/config.example.json` to
-`approval_gate/config.json` and generate each client's entry with the
+store with `./init-store.sh`, copy `shared_memory/approval_gate/config.example.json` to
+`shared_memory/approval_gate/config.json` and generate each client's entry with the
 [snippet generator](../README.md#generate-codex-and-opencode-snippets). Verify the proxy against
 disposable stores with
-`uv run --locked --no-sync pytest -m integration tests/approval_gate`.
+`uv run --locked --no-sync pytest -m integration tests/shared_memory/approval_gate`.
 
 Check the effective server entry, including any project-local override, to see
 which command a client will use. Switching productive clients between the gate
@@ -27,7 +27,7 @@ note is absent while approval is pending.
 `shared-memory-approval-gate` starts the gate in front of the native server and
 requires terminal approval for durable writes; the snippet generator uses it.
 `shared-memory-mcp` starts the native server directly, for chat approval. Both
-read `approval_gate/config.json`, or the file given with `--config` or
+read `shared_memory/approval_gate/config.json`, or the file given with `--config` or
 `SHARED_MEMORY_APPROVAL_CONFIG`, and take no MCP arguments from the client.
 They set private file permissions and refuse to start when the store
 configuration is missing or the runtime lacks the semantic-disable patch. They

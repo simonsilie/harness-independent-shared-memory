@@ -1,7 +1,7 @@
 """Contract tests for the Basic Memory internals the approval gate relies on.
 
 A failure here after a Basic Memory upgrade names the internal that changed;
-adjust `approval_gate.basic_memory_api` before trusting the gate again.
+adjust `shared_memory.approval_gate.basic_memory_api` before trusting the gate again.
 """
 
 from importlib.metadata import version
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from approval_gate.basic_memory_api import (
+from shared_memory.approval_gate.basic_memory_api import (
     RUNTIME_MARKDOWN_FILE_SUFFIXES,
     BasicMemoryConfig,
     ParseError,

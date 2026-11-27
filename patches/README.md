@@ -50,7 +50,7 @@ The locked wheel includes both patches.
 
 ## Reproducible runtime build
 
-`build/semantic_runtime.py` combines the source pin and both patches into one
+`shared_memory/runtime_build.py` combines the source pin and both patches into one
 versioned wheel. The builder pins the original upstream version, wheel URL and
 SHA-256 independently of the patched release in `uv.lock`. It downloads the
 upstream wheel, verifies the hash, applies both patches
@@ -62,8 +62,8 @@ patches and the output are recorded in `build/dist/manifest.json`. Pass
 `--wheel <pinned wheel>` to build from a local copy offline with the same hash check.
 
 ```sh
-uv run --locked python build/semantic_runtime.py build
-uv run --locked python build/semantic_runtime.py verify
+uv run --locked python shared_memory/runtime_build.py build
+uv run --locked python shared_memory/runtime_build.py verify
 ```
 
 `verify` first compares the wheel's SHA-256 with `wheel_sha256` in the manifest,

@@ -1,7 +1,7 @@
 """The only place the approval gate imports Basic Memory internals.
 
 These modules are not a public API and can change in any release. Keeping the
-imports here lets `tests/approval_gate/test_basic_memory_api.py` pin the
+imports here lets `tests/shared_memory/approval_gate/test_basic_memory_api.py` pin the
 behavior the gate relies on, so an upgrade fails there with a targeted test.
 """
 

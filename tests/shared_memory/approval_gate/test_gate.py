@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from approval_gate import ProposalError, cli, proxy
-from approval_gate import native as native_transport
-from approval_gate.config import Config
-from approval_gate.proposals import (
+from shared_memory.approval_gate import ProposalError, cli, proxy
+from shared_memory.approval_gate import native as native_transport
+from shared_memory.approval_gate.config import Config
+from shared_memory.approval_gate.proposals import (
     audit,
     create_or_reuse,
     expired,
@@ -23,7 +23,13 @@ from approval_gate.proposals import (
     prepare,
     save_proposal,
 )
-from approval_gate.writes import NativeCall, effective_metadata, pin_durable_target, temporary_arguments
+from shared_memory.approval_gate.writes import (
+    NativeCall,
+    ProjectListing,
+    effective_metadata,
+    pin_durable_target,
+    temporary_arguments,
+)
 
 DURABLE = "---\ntitle: Decision\nkind: durable\nstatus: active\nsource: session 42\n---\n\nKeep SQLite local.\n"
 STAMP = "2000-01-01T00:00:00Z"
@@ -31,7 +37,7 @@ PROJECT_ID = "00000000-0000-4000-8000-000000000001"
 OTHER_PROJECT_ID = "00000000-0000-4000-8000-000000000002"
 
 
-LISTING = {
+LISTING: ProjectListing = {
     "projects": [
         {"name": "personal", "external_id": PROJECT_ID},
         {"name": "alpha", "external_id": OTHER_PROJECT_ID},
@@ -39,8 +45,8 @@ LISTING = {
 }
 
 
-async def project_listing(_name, _arguments):
-    return LISTING
+async def project_listing(_name, _arguments) -> dict[str, Any]:
+    return dict(LISTING)
 
 
 def temporary_content() -> str:
@@ -139,12 +145,12 @@ def native(tmp_path):
 
 
 def test_integration_temporary_requires_metadata_and_safe_target(tmp_path):
-    listing = {
+    listing: ProjectListing = {
         "projects": [{"name": "personal", "external_id": PROJECT_ID, "source": "local", "local_path": str(tmp_path)}]
     }
 
-    async def call_native(_name, _arguments):
-        return listing
+    async def call_native(_name, _arguments) -> dict[str, Any]:
+        return dict(listing)
 
     args = {"content": temporary_content(), "identifier": "temporary/handover.md", "project": "personal"}
     assert asyncio.run(temporary_arguments(args, listing, call_native))
@@ -185,7 +191,7 @@ UNRESOLVABLE_TARGETS = [
 
 
 @pytest.fixture
-def listing(tmp_path: Path) -> dict[str, Any]:
+def listing(tmp_path: Path) -> ProjectListing:
     return {
         "projects": [
             {
@@ -201,16 +207,16 @@ def listing(tmp_path: Path) -> dict[str, Any]:
 
 
 @pytest.fixture
-def call_native(listing: dict[str, Any]) -> NativeCall:
-    async def call(_name, _arguments):
-        return listing
+def call_native(listing: ProjectListing) -> NativeCall:
+    async def call(_name, _arguments) -> dict[str, Any]:
+        return dict(listing)
 
     return call
 
 
 @pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
 def test_temporary_write_resolves_project(
-    listing: dict[str, Any], call_native: NativeCall, project: str, identifier: str
+    listing: ProjectListing, call_native: NativeCall, project: str, identifier: str
 ) -> None:
     sut = temporary_arguments
     args = {"content": temporary_content(), "identifier": identifier, "project": project}
@@ -222,7 +228,7 @@ def test_temporary_write_resolves_project(
 
 @pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
 def test_temporary_write_with_unresolvable_project_needs_approval(
-    listing: dict[str, Any], call_native: NativeCall, project: str, identifier: str
+    listing: ProjectListing, call_native: NativeCall, project: str, identifier: str
 ) -> None:
     sut = temporary_arguments
     args = {"content": temporary_content(), "identifier": identifier, "project": project}
@@ -233,7 +239,7 @@ def test_temporary_write_with_unresolvable_project_needs_approval(
 
 
 @pytest.mark.parametrize(("project", "identifier"), RESOLVABLE_TARGETS)
-def test_durable_write_resolves_project(listing: dict[str, Any], project: str, identifier: str) -> None:
+def test_durable_write_resolves_project(listing: ProjectListing, project: str, identifier: str) -> None:
     sut = pin_durable_target
     args = {"content": DURABLE, "identifier": identifier, "project": project}
 
@@ -243,7 +249,7 @@ def test_durable_write_resolves_project(listing: dict[str, Any], project: str, i
 
 
 @pytest.mark.parametrize(("project", "identifier"), UNRESOLVABLE_TARGETS)
-def test_durable_write_refuses_unresolvable_project(listing: dict[str, Any], project: str, identifier: str) -> None:
+def test_durable_write_refuses_unresolvable_project(listing: ProjectListing, project: str, identifier: str) -> None:
     sut = pin_durable_target
     args = {"content": DURABLE, "identifier": identifier, "project": project}
 
@@ -251,7 +257,7 @@ def test_durable_write_refuses_unresolvable_project(listing: dict[str, Any], pro
         sut(args, listing)
 
 
-def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], call_native: NativeCall) -> None:
+def test_constrained_session_blocks_temporary_writes(listing: ProjectListing, call_native: NativeCall) -> None:
     sut = temporary_arguments
     listing["constrained_project"] = "personal"
     args = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
@@ -262,10 +268,10 @@ def test_constrained_session_blocks_temporary_writes(listing: dict[str, Any], ca
 
 
 def test_malformed_native_listing_is_a_visible_tool_error(
-    tmp_path: Path, listing: dict[str, Any], call_native: NativeCall
+    tmp_path: Path, listing: ProjectListing, call_native: NativeCall
 ) -> None:
     sut = proxy.handle_write
-    del listing["projects"][0]["external_id"]
+    del listing["projects"][0]["external_id"]  # type: ignore[unsupported-delete]
     config = make_config(tmp_path, ["unused"])
     arguments = {"content": temporary_content(), "identifier": "temporary/note.md", "project": "personal"}
     request = {"id": 1, "params": {"name": "bm_write", "arguments": arguments}}
@@ -435,12 +441,12 @@ def test_integration_proxy_gates_writes_and_allows_only_supported_tools(tmp_path
         )
     )
     process = subprocess.Popen(
-        [sys.executable, "-m", "approval_gate.proxy", "--config", str(config_path)],
+        [sys.executable, "-m", "shared_memory.approval_gate.proxy", "--config", str(config_path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
         bufsize=1,
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=Path(__file__).resolve().parents[3],
     )
     assert process.stdin is not None and process.stdout is not None
     replies: Queue[str] = Queue()
@@ -472,7 +478,7 @@ def test_integration_proxy_gates_writes_and_allows_only_supported_tools(tmp_path
         )
         reply = read_reply(replies, 2)
         assert not reply["result"]["isError"]
-        assert "approval_gate.cli" in reply["result"]["content"][0]["text"]
+        assert "shared_memory.approval_gate.cli" in reply["result"]["content"][0]["text"]
 
         send({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "bm_search", "arguments": {}}})
         assert "result" in read_reply(replies, 3)
@@ -573,12 +579,12 @@ def test_integration_pending_write_does_not_hold_up_later_messages(tmp_path, nat
         )
     )
     process = subprocess.Popen(
-        [sys.executable, "-m", "approval_gate.proxy", "--config", str(config_path)],
+        [sys.executable, "-m", "shared_memory.approval_gate.proxy", "--config", str(config_path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
         bufsize=1,
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=Path(__file__).resolve().parents[3],
     )
     assert process.stdin is not None and process.stdout is not None
     replies: Queue[str] = Queue()

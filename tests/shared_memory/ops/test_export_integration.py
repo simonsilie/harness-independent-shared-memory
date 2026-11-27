@@ -13,7 +13,7 @@ import pytest
 import sqlite_vec
 import yaml
 
-from ops import export
+from shared_memory.ops import export
 
 PERSONAL = "personal"
 ALPHA = "alpha"
@@ -269,8 +269,8 @@ def test_export_cli_writes_bundles_for_every_project(store: Path, tmp_path: Path
         "SHARED_MEMORY_OPS_DESTINATION": str(tmp_path / "unused-destination" if use_positionals else destination),
     }
     result = subprocess.run(
-        [sys.executable, "-m", "ops", "export", *arguments],
-        cwd=Path(__file__).resolve().parents[2],
+        [sys.executable, "-m", "shared_memory.ops", "export", *arguments],
+        cwd=Path(__file__).resolve().parents[3],
         env=environment,
         check=True,
         capture_output=True,
