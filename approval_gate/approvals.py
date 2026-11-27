@@ -74,19 +74,25 @@ def approve(
             if isinstance(error, (NativePreflightError, NativeWriteRefused)):
                 raise
         raise ProposalError(message) from error
-    proposal["status"] = "approved"
-    proposal["approved_at"] = utc_now()
-    save_proposal(config, proposal)
     try:
-        audit(
-            config,
-            "proposal_approved",
-            proposal_id=proposal_id,
-            project=proposal["project"],
-            content_hash=proposal["content_hash"],
-        )
+        with proposal_lock(config):
+            proposal["status"] = "approved"
+            proposal["approved_at"] = utc_now()
+            save_proposal(config, proposal)
+            try:
+                audit(
+                    config,
+                    "proposal_approved",
+                    proposal_id=proposal_id,
+                    project=proposal["project"],
+                    content_hash=proposal["content_hash"],
+                )
+            except OSError as error:
+                warn(f"Could not record the final audit event for approved proposal {proposal_id}: {error}")
     except OSError as error:
-        warn(f"Could not record the final audit event for approved proposal {proposal_id}: {error}")
+        raise ProposalError(
+            f"The note was written, but proposal {proposal_id} could not be marked approved and stays applying: {error}"
+        ) from error
     return True
 
 

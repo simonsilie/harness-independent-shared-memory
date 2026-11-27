@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 from . import ProposalError
 from .config import Config
-from .writes import NativeCall, effective_metadata, pin_durable_target
+from .writes import effective_metadata, pin_durable_target
 
 
 def prepare(config: Config) -> None:
@@ -95,14 +95,14 @@ def expired(proposal: dict[str, Any], *, now: datetime | None = None) -> bool:
     return (now or datetime.now(timezone.utc)) >= deadline
 
 
-async def create_or_reuse(
-    config: Config, arguments: dict[str, Any], call_native: NativeCall, *, now: datetime | None = None
+def create_or_reuse(
+    config: Config, arguments: dict[str, Any], listing: dict[str, Any], *, now: datetime | None = None
 ) -> tuple[dict[str, Any], bool]:
     """Bind a durable write to a proposal, reusing an identical open one."""
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ProposalError("A durable write requires string content.")
-    project, arguments = await pin_durable_target(arguments, call_native)
+    project, arguments = pin_durable_target(arguments, listing)
     payload = json.dumps(arguments, sort_keys=True)
     digest = content_hash(content)
     source = effective_metadata(arguments).get("source")

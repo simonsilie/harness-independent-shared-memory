@@ -4,6 +4,7 @@ import asyncio
 import json
 import shlex
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -47,25 +48,41 @@ def tool_response(
     }
 
 
+@dataclass(frozen=True)
+class ClientReply:
+    """A response the gate sends back to the client itself."""
+
+    message: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class NativeRequest:
+    """A rewritten request the gate forwards to the native server."""
+
+    message: dict[str, Any]
+
+
 async def handle_write(
     request: dict[str, Any], config: Config, config_path: Path, call_native: NativeCall
-) -> dict[str, Any]:
+) -> ClientReply | NativeRequest:
     arguments = request["params"].get("arguments", {})
     if not isinstance(arguments, dict):
-        return tool_response(request, "bm_write arguments must be an object", is_error=True)
+        return ClientReply(tool_response(request, "bm_write arguments must be an object", is_error=True))
     try:
-        temporary = await temporary_arguments(arguments, call_native)
+        listing = await call_native("bm_project", {"command": "list"})
+        temporary = await temporary_arguments(arguments, listing, call_native)
         if temporary is not None:
-            return {**request, "params": {**request["params"], "arguments": temporary}}
-        proposal, created = await create_or_reuse(config, arguments, call_native)
+            return NativeRequest({**request, "params": {**request["params"], "arguments": temporary}})
+        proposal, created = create_or_reuse(config, arguments, listing)
     except (ProposalError, LookupError, ValueError) as error:
         # A malformed native reply must not escape and stop the client relay thread.
         reason = str(error) if isinstance(error, ProposalError) else f"Unexpected native response: {error!r}"
         audit(config, "write_refused", reason=reason, id=request.get("id"))
-        return tool_response(request, reason, is_error=True)
+        return ClientReply(tool_response(request, reason, is_error=True))
     if request.get("id") is None:
         audit(config, "unidentified_write_refused", proposal_id=proposal["id"])
-        return tool_response(request, f"Proposal {proposal['id']} created; send a request with an id to see it", True)
+        text = f"Proposal {proposal['id']} created; send a request with an id to see it"
+        return ClientReply(tool_response(request, text, is_error=True))
     action = "Created" if created else "Reusing open"
     command = shlex.join(
         [sys.executable, "-m", "approval_gate.cli", "--config", str(config_path.resolve()), "approve", proposal["id"]]
@@ -78,7 +95,7 @@ async def handle_write(
         f"content hash: {proposal['content_hash']}. "
         f"Owner approval command: (cd {checkout} && {command})"
     )
-    return tool_response(request, text, proposal_id=proposal["id"])
+    return ClientReply(tool_response(request, text, proposal_id=proposal["id"]))
 
 
 async def _run_proxy(config: Config, config_path: Path) -> int:
@@ -103,6 +120,23 @@ async def _run_proxy(config: Config, config_path: Path) -> int:
             return structured_data(await client.call_tool(name, arguments, meta), name)
 
         return call
+
+    async def relay_write(message: dict[str, Any]) -> None:
+        try:
+            reply = await handle_write(message, config, config_path, native_call(envelope(message)))
+        except OSError as error:
+            reply = ClientReply(tool_response(message, f"Approval gate could not process bm_write: {error}", True))
+        try:
+            match reply:
+                case ClientReply(response):
+                    await emit(response)
+                case NativeRequest(request):
+                    await client.send(request)
+        except (ValueError, OSError) as error:
+            warn(f"Could not relay the bm_write reply: {error}")
+
+    # Each write runs in its own task so its native lookups do not hold up later client messages.
+    writes: set[asyncio.Task[None]] = set()
 
     async def client_to_native() -> None:
         try:
@@ -137,19 +171,14 @@ async def _run_proxy(config: Config, config_path: Path) -> int:
                     if batch:
                         await emit(tool_response(message, "Batched bm_write calls are not allowed", is_error=True))
                         continue
-                    try:
-                        response = await handle_write(message, config, config_path, native_call(envelope(message)))
-                    except OSError as error:
-                        response = tool_response(
-                            message, f"Approval gate could not process bm_write: {error}", is_error=True
-                        )
-                    if "result" in response:
-                        await emit(response)
-                    else:
-                        await client.send(response)
+                    task = asyncio.create_task(relay_write(message))
+                    writes.add(task)
+                    task.add_done_callback(writes.discard)
         except (ValueError, OSError) as error:
             warn(f"Client-to-native relay stopped: {error}")
         finally:
+            # A forwarded temporary write must reach the native server before its stdin closes.
+            await asyncio.gather(*writes, return_exceptions=True)
             try:
                 client.stdin.close()
             except OSError as error:
@@ -173,6 +202,8 @@ async def _run_proxy(config: Config, config_path: Path) -> int:
         warn(f"Native-to-client relay stopped: {error}")
     status = await native.wait()
     requests.cancel()
+    for task in writes:
+        task.cancel()
     return status
 
 

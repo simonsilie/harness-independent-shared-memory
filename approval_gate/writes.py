@@ -105,13 +105,12 @@ def strip_project_prefix(path: str, listing: dict[str, Any], project_id: str) ->
     return path
 
 
-async def pin_durable_target(arguments: dict[str, Any], call_native: NativeCall) -> tuple[str, dict[str, Any]]:
+def pin_durable_target(arguments: dict[str, Any], listing: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     project = arguments.get("project", arguments.get("project_id"))
     if not isinstance(project, str) or not project.strip():
         raise ProposalError("A durable write requires an explicit project.")
     project = project.strip()
     arguments = write_arguments(arguments)
-    listing = await call_native("bm_project", {"command": "list"})
     selected, by_id = resolve_project(project, listing)
     project_id = str(UUID(selected["external_id"]))
     arguments.pop("project_id", None)
@@ -136,7 +135,9 @@ async def pin_durable_target(arguments: dict[str, Any], call_native: NativeCall)
     return _display_name(selected), arguments
 
 
-async def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall) -> dict[str, Any] | None:
+async def temporary_arguments(
+    arguments: dict[str, Any], listing: dict[str, Any], call_native: NativeCall
+) -> dict[str, Any] | None:
     fields = effective_metadata(arguments)
     status = fields.get("status")
     if fields.get("kind") != "temporary" or status not in ("active", "completed", "archived"):
@@ -161,7 +162,6 @@ async def temporary_arguments(arguments: dict[str, Any], call_native: NativeCall
     if not parts or not {"temporary", "handovers"}.intersection(parts):
         return None
 
-    listing = await call_native("bm_project", {"command": "list"})
     try:
         selected, by_id = resolve_project(project.strip(), listing)
         project_id = str(UUID(selected["external_id"]))
