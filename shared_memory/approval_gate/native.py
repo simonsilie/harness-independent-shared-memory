@@ -25,6 +25,8 @@ MODEL_FREE_ENV = {
     "WATCHFILES_FORCE_POLLING": "true",
 }
 
+INHERITED_ENV = frozenset({"HOME", "LANG", "LC_ALL", "LC_CTYPE", "PATH", "TMPDIR"})
+
 REQUEST_TIMEOUT = 20
 SHUTDOWN_TIMEOUT = 10
 MESSAGE_LIMIT = 16 * 1024 * 1024
@@ -103,7 +105,8 @@ def structured_data(result: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def native_environment(config: Config) -> dict[str, str]:
-    return dict(os.environ) | (config.env or {}) | MODEL_FREE_ENV
+    inherited = {key: os.environ[key] for key in INHERITED_ENV if key in os.environ}
+    return inherited | (config.env or {}) | MODEL_FREE_ENV
 
 
 async def start_native(config: Config) -> asyncio.subprocess.Process:

@@ -34,6 +34,11 @@ configuration is missing or the runtime lacks the semantic-disable patch. They
 force local routing, semantic search, automatic updates and Logfire off and
 polling-based file watching, overriding the configured environment.
 
+The native process inherits only `HOME`, `PATH`, `TMPDIR`, `LANG`, `LC_ALL`
+and `LC_CTYPE` from the launcher or owner CLI. Set any additional settings the
+native process needs, such as `BASIC_MEMORY_CONFIG_DIR`, in the gate
+configuration's `env` object. Do not put model credentials there.
+
 With explicit owner approval, select the command in each client's
 `basic_memory` server entry. Preserve the client tool permissions, restart each
 affected client and verify it as described above. To restore the previous

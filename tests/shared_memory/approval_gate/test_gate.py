@@ -80,7 +80,14 @@ from pathlib import Path
 log = open(sys.argv[1], "a")
 mode = os.getenv("APPROVAL_GATE_FAKE_MODE")
 if mode == "approval_env":
-    keys = ("BASIC_MEMORY_AUTO_UPDATE", "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED", "BASIC_MEMORY_FORCE_LOCAL")
+    keys = (
+        "UNRELATED_CLIENT_SETTING",
+        "BASIC_MEMORY_AUTO_UPDATE",
+        "BASIC_MEMORY_CONFIG_DIR",
+        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED",
+        "BASIC_MEMORY_FORCE_LOCAL",
+        "TMPDIR",
+    )
     log.write(json.dumps({"env": {key: os.getenv(key) for key in keys}}) + "\n")
 if mode == "proxy_shutdown":
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -720,11 +727,15 @@ def test_integration_approval_reports_a_failed_final_save(tmp_path, native):
 
 def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path, native, monkeypatch):
     native_command, log = native
+    monkeypatch.setenv("UNRELATED_CLIENT_SETTING", "synthetic-value")
     monkeypatch.setenv("BASIC_MEMORY_AUTO_UPDATE", "true")
+    monkeypatch.setenv("BASIC_MEMORY_CONFIG_DIR", str(tmp_path / "inherited"))
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
     config = make_config(tmp_path, native_command).model_copy(
         update={
             "env": {
                 "APPROVAL_GATE_FAKE_MODE": "approval_env",
+                "BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "configured"),
                 "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "true",
                 "BASIC_MEMORY_FORCE_LOCAL": "false",
             }
@@ -744,9 +755,12 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
     assert stored["status"] == "approved" and stored["approved_at"]
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     assert calls[0]["env"] == {
+        "UNRELATED_CLIENT_SETTING": None,
         "BASIC_MEMORY_AUTO_UPDATE": "false",
+        "BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "configured"),
         "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
         "BASIC_MEMORY_FORCE_LOCAL": "true",
+        "TMPDIR": str(tmp_path),
     }
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
     assert written == [
