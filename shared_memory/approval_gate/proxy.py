@@ -10,7 +10,7 @@ from typing import Any
 
 import configargparse
 
-from . import ALLOWED_TOOLS, ProposalError
+from . import ALLOWED_TOOLS, ProposalError, native
 from .config import Config, add_config_argument, load_config
 from .native import (
     ENVELOPE_KEYS,
@@ -108,8 +108,8 @@ async def handle_write(
 
 async def _run_proxy(config: Config, config_path: Path) -> int:
     prepare(config)
-    native = await start_native(config)
-    client = NativeClient(native)
+    process = await start_native(config)
+    client = NativeClient(process)
     loop = asyncio.get_running_loop()
     client_in = asyncio.StreamReader(limit=MESSAGE_LIMIT)
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(client_in), sys.stdin)
@@ -184,13 +184,6 @@ async def _run_proxy(config: Config, config_path: Path) -> int:
                     task.add_done_callback(writes.discard)
         except (ValueError, OSError) as error:
             warn(f"Client-to-native relay stopped: {error}")
-        finally:
-            # A forwarded temporary write must reach the native server before its stdin closes.
-            await asyncio.gather(*writes, return_exceptions=True)
-            try:
-                client.stdin.close()
-            except OSError as error:
-                warn(f"Could not close native stdin: {error}")
 
     async def forward(line: bytes, reply: Any) -> None:
         if isinstance(reply, dict) and "method" not in reply:
@@ -204,14 +197,35 @@ async def _run_proxy(config: Config, config_path: Path) -> int:
         await write_client(line)
 
     requests = asyncio.create_task(client_to_native())
+    replies = asyncio.create_task(client.relay(forward))
+    status = 0
     try:
-        await client.relay(forward)
+        done, _ = await asyncio.wait((requests, replies), return_when=asyncio.FIRST_COMPLETED)
+        if replies in done:
+            requests.cancel()
+            for task in writes:
+                task.cancel()
+        else:
+            # Keep reading replies while in-flight temporary writes are forwarded before native EOF.
+            try:
+                await asyncio.wait_for(asyncio.gather(*writes, return_exceptions=True), native.SHUTDOWN_TIMEOUT)
+            except TimeoutError:
+                warn("Timed out draining pending writes during proxy shutdown.")
+                status = 1
+
+        await native.shutdown_native(process)
+        await asyncio.wait_for(replies, native.SHUTDOWN_TIMEOUT)
+    except TimeoutError:
+        warn("Native reply stream did not close during proxy shutdown.")
+        status = 1
     except (ValueError, OSError) as error:
-        warn(f"Native-to-client relay stopped: {error}")
-    status = await native.wait()
-    requests.cancel()
-    for task in writes:
-        task.cancel()
+        warn(f"Proxy shutdown failed: {error}")
+        status = process.returncode or 1
+    finally:
+        tasks = (requests, replies, *writes)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
     return status
 
 

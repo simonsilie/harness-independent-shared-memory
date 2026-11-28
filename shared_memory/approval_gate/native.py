@@ -173,7 +173,7 @@ class NativeClient:
                     pending.set_exception(failure)
 
 
-async def _shutdown(process: asyncio.subprocess.Process) -> None:
+async def shutdown_native(process: asyncio.subprocess.Process) -> None:
     assert process.stdin is not None
     process.stdin.close()
     # Basic Memory drains accepted writes to Markdown during its EOF shutdown.
@@ -226,7 +226,7 @@ async def _native_write(config: Config, arguments: dict[str, Any]) -> None:
         raise
     finally:
         try:
-            await _shutdown(process)
+            await shutdown_native(process)
         except (OSError, ProposalError) as error:
             if write_acknowledged:
                 raise
