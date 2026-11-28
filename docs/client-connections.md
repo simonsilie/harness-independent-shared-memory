@@ -30,10 +30,12 @@ requires terminal approval for durable writes; the snippet generator uses it.
 read `shared_memory/approval_gate/config.json`, or the file given with `--config` or
 `SHARED_MEMORY_APPROVAL_CONFIG`, and take no MCP arguments from the client.
 They set private file permissions and refuse to start when the store
-configuration is missing or the runtime lacks the MCP project-creation patch.
-They enforce local routing, FastEmbed and hybrid search, overriding previous
-text-only settings. They disable reranking, automatic updates and Logfire and
-use polling-based file watching.
+configuration is missing, the runtime lacks the MCP project-creation patch, or
+the old semantic-disable patch is present. They enforce local routing and
+FastEmbed, leaving search mode to Basic Memory. With no configured default,
+Basic Memory uses hybrid search when the vector runtime is available and text
+search otherwise. The launchers disable reranking, automatic updates and
+Logfire and use polling-based file watching.
 
 The native process inherits only `HOME`, `PATH`, `TMPDIR`, `LANG`, `LC_ALL`
 and `LC_CTYPE` from the launcher or owner CLI. Set any additional settings the
@@ -47,9 +49,15 @@ mode, select the other command again and restart the client.
 
 ## Build embeddings for an existing store
 
-When moving a text-only store to hybrid search, build the missing vectors with
-Basic Memory. Run this from the checkout root. FastEmbed can download the model
-on first use and caches it under the store's state directory by default.
+When moving a text-only store to hybrid search, first run `uv sync --locked`
+from the checkout root to replace the old semantic-disable wheel. Remove
+`default_search_type` (previously `"text"`) from the store's `state/config.json` and
+`BASIC_MEMORY_DEFAULT_SEARCH_TYPE` from the launcher configuration's `env`
+object if set there. Leave the mode unset rather than setting it to `hybrid`
+so the native text fallback still works.
+
+Build the missing vectors from the checkout root. FastEmbed can download the
+model on first use and caches it under the store's state directory by default.
 
 ```sh
 BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state" \

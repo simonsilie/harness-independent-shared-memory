@@ -35,7 +35,7 @@ uv run --locked python shared_memory/runtime_build.py verify
 dependencies into `build/.verify-venv` and runs the
 [watcher probe](../evaluation/native/mcp_watcher.py) with `--installed`. The
 probe checks MCP startup, writes, indexing and text recall while simulating an
-unavailable vector runtime. It uses `PHASE1B_EXPECTED_VERSION` to check the
+unavailable vector runtime. It uses `NATIVE_MCP_EXPECTED_VERSION` to check the
 wheel's local version suffix.
 
 To deploy a new build, publish the versioned wheel and update its version and

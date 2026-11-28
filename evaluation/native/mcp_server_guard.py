@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-guard_path = Path(os.environ["PHASE1B_GUARD_PATH"])
+guard_path = Path(os.environ["NATIVE_MCP_GUARD_PATH"])
 events: dict[str, Any] = {"blocked_imports": [], "blocked_connections": 0}
 
 

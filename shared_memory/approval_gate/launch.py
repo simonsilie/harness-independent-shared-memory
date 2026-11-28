@@ -26,6 +26,8 @@ def prepare_launch(argv: list[str] | None, description: str) -> tuple[Config, Pa
         parser.error(f"Shared memory is not configured at {state}")
     if "enable_mcp_project_create" not in BasicMemoryConfig.model_fields:
         parser.error("Shared memory requires the patched runtime for MCP project creation; run uv sync --locked.")
+    if "semantic_search_enabled" in BasicMemoryConfig.model_fields:
+        parser.error("Shared memory no longer supports the semantic-disable runtime; run uv sync --locked.")
     return config, args.config
 
 

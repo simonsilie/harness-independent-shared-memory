@@ -17,12 +17,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from evaluation.support import client_environment, sha256_file  # noqa: E402
+from shared_memory.approval_gate.native import NATIVE_ENV  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 OUT.mkdir(parents=True)
 logger.info(f"Native MCP/watcher probe artifacts: {OUT}")
 installed_version = version("basic-memory")
-expected_version = os.environ.get("PHASE1B_EXPECTED_VERSION")
+expected_version = os.environ.get("NATIVE_MCP_EXPECTED_VERSION")
 if expected_version is None:
     assert installed_version.partition("+")[0] == "1.0.0"
 else:
@@ -47,7 +48,7 @@ corpus.mkdir()
 # Do not inherit another deployment's routing, credentials or test-mode overrides.
 # Unlike the CLI probe, BASIC_MEMORY_DEFAULT_SEARCH_TYPE stays unset: the default
 # search mode must fall back to text on its own when semantic search is unavailable.
-env = client_environment("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_")
+env = client_environment("BASIC_MEMORY_", "NATIVE_MCP_", "OPENAI_", "LOGFIRE_")
 env.pop("PYTEST_CURRENT_TEST", None)
 if installed:
     env.pop("PYTHONPATH", None)
@@ -98,7 +99,7 @@ def server_params(name):
     return StdioServerParameters(
         command=sys.executable,
         args=[str(SERVER), "mcp", "--transport", "stdio", "--project", "main"],
-        env=env | {"PHASE1B_GUARD_PATH": str(OUT / f"{name}.guard.json")},
+        env=env | NATIVE_ENV | {"NATIVE_MCP_GUARD_PATH": str(OUT / f"{name}.guard.json")},
     )
 
 
@@ -110,7 +111,7 @@ async def with_session(name, work):
                 return await work(session)
 
 
-async def phase1(session):
+async def check_initial_server(session):
     tools = await asyncio.wait_for(session.list_tools(), 60)
     dump("tools", sorted(tool.name for tool in tools.tools))
     assert {"bm_read", "bm_search", "bm_write"} <= {tool.name for tool in tools.tools}
@@ -173,7 +174,7 @@ async def phase1(session):
     assert {row["permalink"] for row in still["results"]} == {"main/watcher", "main/observed"}, still
 
 
-async def phase2(session):
+async def check_restarted_server(session):
     read = await call(
         session, "read-after-restart", "bm_read", {"identifier": "watcher", "project": "main", "output_format": "json"}
     )
@@ -187,8 +188,8 @@ async def phase2(session):
     assert {row["permalink"] for row in search["results"]} == {"main/watcher", "main/observed"}, search
 
 
-asyncio.run(with_session("server-1", phase1))
-asyncio.run(with_session("server-2", phase2))
+asyncio.run(with_session("server-1", check_initial_server))
+asyncio.run(with_session("server-2", check_restarted_server))
 
 crash = subprocess.run(
     [
@@ -250,7 +251,7 @@ summary = {
         "One MCP stdio client per server process with a 30 s dwell, not real model traffic. "
         "The keyword-only fallback was simulated by blocking the sqlite_vec import; a deployment "
         "keeps it by not providing sqlite-vec. No protected execution boundary, no proposal/handover "
-        "workflow, no portable recovery. No Phase 1B rollout gate is passed by this run."
+        "workflow, no portable recovery."
     ),
 }
 (OUT / "result.json").write_text(json.dumps(summary, indent=2) + "\n")

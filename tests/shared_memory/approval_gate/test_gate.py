@@ -761,7 +761,7 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
         "BASIC_MEMORY_AUTO_UPDATE": "false",
         "BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "configured"),
         "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
-        "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "hybrid",
+        "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
         "BASIC_MEMORY_FORCE_LOCAL": "true",
         "TMPDIR": str(tmp_path),
     }

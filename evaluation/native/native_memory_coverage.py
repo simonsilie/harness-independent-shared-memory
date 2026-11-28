@@ -35,7 +35,7 @@ for directory in projects.values():
     )
     + "\n"
 )
-env = client_environment("BASIC_MEMORY_", "PHASE1B_", "OPENAI_", "LOGFIRE_")
+env = client_environment("BASIC_MEMORY_", "NATIVE_MCP_", "OPENAI_", "LOGFIRE_")
 env.pop("PYTEST_CURRENT_TEST", None)
 env.update(
     {
@@ -169,7 +169,7 @@ async def main():
     params = StdioServerParameters(
         command=sys.executable,
         args=[str(GUARD), "mcp", "--transport", "stdio"],
-        env=env | {"PHASE1B_GUARD_PATH": str(OUT / "server.guard.json")},
+        env=env | {"NATIVE_MCP_GUARD_PATH": str(OUT / "server.guard.json")},
     )
     with (OUT / "server.stderr").open("w") as errlog:
         async with stdio_client(params, errlog=errlog) as (read, write):
@@ -183,7 +183,7 @@ source_before_export = {name: snapshot(path) for name, path in projects.items()}
 for name in projects:
     result = subprocess.run(
         [sys.executable, str(GUARD), "okf", "export", str(OUT / "export" / name), "--project", name, "--json"],
-        env=env | {"PHASE1B_GUARD_PATH": str(OUT / f"export-{name}.guard.json")},
+        env=env | {"NATIVE_MCP_GUARD_PATH": str(OUT / f"export-{name}.guard.json")},
         capture_output=True,
         text=True,
         timeout=180,

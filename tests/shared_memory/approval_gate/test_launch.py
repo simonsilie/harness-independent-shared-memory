@@ -34,7 +34,7 @@ def keep_umask(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return masks
 
 
-def test_mcp_launch_enables_local_embeddings_for_legacy_settings(tmp_path, state, monkeypatch, keep_umask):
+def test_mcp_launch_selects_fastembed_without_forcing_search_mode(tmp_path, state, monkeypatch, keep_umask):
     inherited = {
         "HOME": "/example/home",
         "PATH": "/example/bin",
@@ -50,7 +50,6 @@ def test_mcp_launch_enables_local_embeddings_for_legacy_settings(tmp_path, state
             "BASIC_MEMORY_CONFIG_DIR": str(state),
             "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "openai",
             "basic_memory_semantic_embedding_provider": "openai",
-            "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
         },
     )
     calls = []
@@ -63,7 +62,7 @@ def test_mcp_launch_enables_local_embeddings_for_legacy_settings(tmp_path, state
     assert command == ["/example/bin/basic-memory", "mcp"]
     assert env == inherited | {"BASIC_MEMORY_CONFIG_DIR": str(state)} | NATIVE_ENV
     assert env["BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER"] == "fastembed"
-    assert env["BASIC_MEMORY_DEFAULT_SEARCH_TYPE"] == "hybrid"
+    assert "BASIC_MEMORY_DEFAULT_SEARCH_TYPE" not in env
     assert keep_umask == [0o077]
 
 
@@ -86,6 +85,23 @@ def test_launch_refuses_an_unpatched_runtime(tmp_path, state, monkeypatch, capsy
         launch.gate_main(["--config", str(path)])
 
     assert "patched runtime for MCP project creation" in capsys.readouterr().err
+
+
+def test_launch_refuses_the_old_semantic_disable_runtime(tmp_path, state, monkeypatch, capsys):
+    path = write_config(tmp_path, {"BASIC_MEMORY_CONFIG_DIR": str(state)})
+    monkeypatch.setattr(
+        launch,
+        "BasicMemoryConfig",
+        type("Legacy", (), {"model_fields": dict.fromkeys(("enable_mcp_project_create", "semantic_search_enabled"))}),
+    )
+    monkeypatch.setattr(launch.os, "execvpe", pytest.fail)
+
+    with pytest.raises(SystemExit):
+        launch.mcp_main(["--config", str(path)])
+
+    error = capsys.readouterr().err
+    assert "semantic-disable runtime" in error
+    assert "uv sync --locked" in error
 
 
 def test_gate_launch_passes_configured_store_to_the_proxy(tmp_path, state, monkeypatch):

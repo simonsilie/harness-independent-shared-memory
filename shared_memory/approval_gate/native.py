@@ -16,11 +16,10 @@ from . import ProposalError
 from .basic_memory_api import resolve_path_within_root
 from .config import Config
 
-# ADR 0014: these override legacy text-only settings in existing stores.
+# Leave search mode unset by default so Basic Memory can fall back to text.
 NATIVE_ENV = {
     "BASIC_MEMORY_FORCE_LOCAL": "true",
     "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
-    "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "hybrid",
     "BASIC_MEMORY_RERANKER_ENABLED": "false",
     "BASIC_MEMORY_AUTO_UPDATE": "false",
     "BASIC_MEMORY_LOGFIRE_ENABLED": "false",

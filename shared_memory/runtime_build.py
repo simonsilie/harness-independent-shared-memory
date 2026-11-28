@@ -177,7 +177,7 @@ def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.
         )
 
     watcher_env = os.environ | {
-        "PHASE1B_EXPECTED_VERSION": build_version,
+        "NATIVE_MCP_EXPECTED_VERSION": build_version,
         "WATCHFILES_FORCE_POLLING": "true",
     }
     return subprocess.run(
