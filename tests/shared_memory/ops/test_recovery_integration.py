@@ -6,6 +6,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+import sqlite_vec
 
 from shared_memory.ops import backup, inventory, recovery, restore
 
@@ -76,6 +77,30 @@ def test_backup_refuses_unindexed_file(store, tmp_path, missing_suffix):
         backup(store, tmp_path / "backup")
 
     assert not (tmp_path / "backup/manifest.json").exists()
+
+
+def test_round_trip_preserves_vector_index(store, tmp_path):
+    config_path = store / "state/config.json"
+    config = json.loads(config_path.read_text())
+    config_path.write_text(json.dumps(config | {"default_search_type": "hybrid"}))
+    with closing(sqlite3.connect(store / "state/memory.db")) as connection, connection:
+        connection.enable_load_extension(True)
+        sqlite_vec.load(connection)
+        connection.enable_load_extension(False)
+        connection.execute("CREATE VIRTUAL TABLE search_vector_embeddings USING vec0(embedding float[2])")
+        connection.execute("INSERT INTO search_vector_embeddings VALUES (1, '[1.0, 2.0]')")
+
+    archive, target = tmp_path / "backup", tmp_path / "restored"
+    backup(store, archive)
+    restore(archive, target)
+
+    with recovery.read_database(target / "state/memory.db") as connection:
+        connection.enable_load_extension(True)
+        sqlite_vec.load(connection)
+        connection.enable_load_extension(False)
+        embedding = connection.execute("SELECT vec_to_json(embedding) FROM search_vector_embeddings").fetchone()[0]
+        assert json.loads(embedding) == [1.0, 2.0]
+    assert json.loads((target / "state/config.json").read_text())["default_search_type"] == "hybrid"
 
 
 def test_restore_refuses_corruption(store, tmp_path):

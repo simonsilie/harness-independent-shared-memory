@@ -31,8 +31,7 @@ config = {
     },
     "default_project": "personal",
     "database_backend": "sqlite",
-    "default_search_type": "text",
-    "semantic_search_enabled": False,
+    "semantic_embedding_provider": "fastembed",
     "auto_update": False,
     "logfire_enabled": False,
 }

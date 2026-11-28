@@ -17,7 +17,6 @@ from tempfile import TemporaryDirectory
 import configargparse
 
 ROOT = Path(__file__).resolve().parents[1]
-PATCH = ROOT / "patches" / "basic-memory-semantic-disable.patch"
 PROJECT_CREATE_PATCH = ROOT / "patches" / "basic-memory-mcp-project-create.patch"
 WATCHER = ROOT / "evaluation" / "native" / "mcp_watcher.py"
 DIST = ROOT / "build" / "dist"
@@ -28,8 +27,8 @@ BASE_WHEEL_URL = (
     "basic_memory-1.0.0-py3-none-any.whl"
 )
 BASE_WHEEL_SHA256 = "a2d2c1589616c9599aec9edd6597d508028c5af88632312fc0990dcaccf02867"
-BUILD_REVISION = "semantic.2"
-PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "-p1", "-i", str(PATCH)]
+BUILD_REVISION = "project.2"
+PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "--no-backup-if-mismatch", "-p1"]
 WHEEL_SUFFIX = "-py3-none-any.whl"
 
 
@@ -43,18 +42,15 @@ def download(url: str, expected_sha256: str) -> bytes:
 
 
 def patched_files() -> list[str]:
-    return list(
-        dict.fromkeys(
-            line.removeprefix("--- a/")
-            for patch in (PATCH, PROJECT_CREATE_PATCH)
-            for line in patch.read_text().splitlines()
-            if line.startswith("--- a/")
-        )
-    )
+    return [
+        line.removeprefix("--- a/")
+        for line in PROJECT_CREATE_PATCH.read_text().splitlines()
+        if line.startswith("--- a/")
+    ]
 
 
 def apply_patch(root: Path, patch: Path) -> None:
-    command = [*PATCH_ARGS[:-1], str(patch)]
+    command = [*PATCH_ARGS, "-i", str(patch)]
     existing = subprocess.run([*command, "--reverse", "--dry-run"], cwd=root, capture_output=True, text=True)
     if existing.returncode == 0:
         raise ValueError(f"the pinned wheel already contains {patch.name}")
@@ -111,7 +107,6 @@ def package_wheel(source: Path, out_dir: Path, base_version: str, expected_sha25
                 if member.startswith("/") or ".." in Path(member).parts:
                     raise ValueError(f"unsafe wheel member: {member}")
             archive.extractall(root)
-        apply_patch(root, PATCH)
         apply_patch(root, PROJECT_CREATE_PATCH)
         reversion(root, base_version, build_version)
         pack(root, destination)
@@ -120,7 +115,6 @@ def package_wheel(source: Path, out_dir: Path, base_version: str, expected_sha25
         "base_version": base_version,
         "base_wheel_sha256": actual_sha256,
         "build_revision": BUILD_REVISION,
-        "patch_sha256": hashlib.sha256(PATCH.read_bytes()).hexdigest(),
         "patched_files": patched_files(),
         "project_create_patch_sha256": hashlib.sha256(PROJECT_CREATE_PATCH.read_bytes()).hexdigest(),
         "wheel": destination.name,
@@ -183,11 +177,11 @@ def verify(wheel: Path, build_version: str, expected_sha256: str) -> subprocess.
         )
 
     watcher_env = os.environ | {
-        "PHASE1B_EXPECTED_VERSION": build_version,
+        "NATIVE_MCP_EXPECTED_VERSION": build_version,
         "WATCHFILES_FORCE_POLLING": "true",
     }
     return subprocess.run(
-        [str(VERIFY_ENV / "bin" / "python"), str(WATCHER), "--installed-semantic-disabled"],
+        [str(VERIFY_ENV / "bin" / "python"), str(WATCHER), "--installed"],
         cwd=ROOT,
         env=watcher_env,
     )

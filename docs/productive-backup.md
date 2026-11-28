@@ -85,11 +85,14 @@ BASIC_MEMORY_FORCE_LOCAL=true \
 uv run --locked --no-sync basic-memory reindex --full --search
 ```
 
-The restored configuration retains `semantic_search_enabled=false`. Indexing
-refreshes technical database timestamps, including `note_content.updated_at`;
-it preserves note bodies, checksums, revision counters and authored lifecycle
-metadata such as `last_activity`. Activating a recovered store in the clients is
-a separate explicit operation; this drill does not switch their connections.
+The snapshot retains the store's persisted search settings and any existing
+vectors. For an older text-only snapshot, follow the
+[embedding rebuild steps](client-connections.md#build-embeddings-for-an-existing-store)
+with `BASIC_MEMORY_CONFIG_DIR` pointing to the restored `state` directory.
+Indexing refreshes technical database timestamps, including
+`note_content.updated_at`, and preserves note bodies, checksums, revision
+counters and authored lifecycle metadata such as `last_activity`. Activate a
+recovered store by pointing clients at the restored configuration.
 
 ## Verification evidence
 

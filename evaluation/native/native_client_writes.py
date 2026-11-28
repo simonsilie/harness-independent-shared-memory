@@ -34,7 +34,7 @@ for directory in (state, corpus, workspace):
     + "\n"
 )
 before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
-env = client_environment("BASIC_MEMORY_", "PHASE1B_")
+env = client_environment("BASIC_MEMORY_", "NATIVE_MCP_")
 env.pop("PYTEST_CURRENT_TEST", None)
 env.update(
     {
@@ -77,7 +77,7 @@ def run(client, name, operations):
             "HF_HUB_OFFLINE",
             "WATCHFILES_FORCE_POLLING",
         }
-    } | {"PHASE1B_GUARD_PATH": str(OUT / f"{name}.guard.json")}
+    } | {"NATIVE_MCP_GUARD_PATH": str(OUT / f"{name}.guard.json")}
     if client == "codex":
         config = {
             "mcp_servers.basic_memory.command": SERVER[0],

@@ -158,8 +158,8 @@ wheels = [
 
 [[package]]
 name = "basic-memory"
-version = "1.0.0+semantic.2"
-source = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" }
+version = "1.0.0+project.2"
+source = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-project.2/basic_memory-1.0.0%2Bproject.2-py3-none-any.whl" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiosqlite" },
@@ -206,7 +206,7 @@ dependencies = [
     { name = "watchfiles" },
 ]
 wheels = [
-    { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl", hash = "sha256:59024a4bad14abbeffc571f51945ebb0acfb3423099c267535fa13f09c988591" },
+    { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-project.2/basic_memory-1.0.0%2Bproject.2-py3-none-any.whl", hash = "sha256:bde3064f93005a4317b0878a6a5e0aa061a867f246dad27fd495553f26b5b407" },
 ]
 
 [package.metadata]
@@ -1023,7 +1023,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "basic-memory", url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" },
+    { name = "basic-memory", url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-project.2/basic_memory-1.0.0%2Bproject.2-py3-none-any.whl" },
     { name = "configargparse", specifier = ">=1.7.5" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "pydantic", specifier = ">=2" },

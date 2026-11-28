@@ -30,9 +30,12 @@ requires terminal approval for durable writes; the snippet generator uses it.
 read `shared_memory/approval_gate/config.json`, or the file given with `--config` or
 `SHARED_MEMORY_APPROVAL_CONFIG`, and take no MCP arguments from the client.
 They set private file permissions and refuse to start when the store
-configuration is missing or the runtime lacks the semantic-disable patch. They
-force local routing, semantic search, automatic updates and Logfire off and
-polling-based file watching, overriding the configured environment.
+configuration is missing, the runtime lacks the MCP project-creation patch, or
+the old semantic-disable patch is present. They enforce local routing and
+FastEmbed, leaving search mode to Basic Memory. With no configured default,
+Basic Memory uses hybrid search when the vector runtime is available and text
+search otherwise. The launchers disable reranking, automatic updates and
+Logfire and use polling-based file watching.
 
 The native process inherits only `HOME`, `PATH`, `TMPDIR`, `LANG`, `LC_ALL`
 and `LC_CTYPE` from the launcher or owner CLI. Set any additional settings the
@@ -43,6 +46,31 @@ With explicit owner approval, select the command in each client's
 `basic_memory` server entry. Preserve the client tool permissions, restart each
 affected client and verify it as described above. To restore the previous
 mode, select the other command again and restart the client.
+
+## Build embeddings for an existing store
+
+When moving a text-only store to hybrid search, first run `uv sync --locked`
+from the checkout root to replace the old semantic-disable wheel. Remove
+`default_search_type` (previously `"text"`) from the store's `state/config.json` and
+`BASIC_MEMORY_DEFAULT_SEARCH_TYPE` from the launcher configuration's `env`
+object if set there. Leave the mode unset rather than setting it to `hybrid`
+so the native text fallback still works.
+
+Build the missing vectors from the checkout root. FastEmbed can download the
+model on first use and caches it under the store's state directory by default.
+
+```sh
+BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state" \
+BASIC_MEMORY_FORCE_LOCAL=true \
+BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER=fastembed \
+BASIC_MEMORY_RERANKER_ENABLED=false \
+  uv run --locked --no-sync basic-memory reindex --embeddings
+```
+
+Restart the client to pick up the new launcher settings. Use a scoped
+`bm_search` without `mode` for topic recall and `mode="text"` for exact terms
+or to retry a query when semantic search is unavailable. Update any existing
+client instructions that require `mode="text"` for all topic queries.
 
 ## Optional dotfiles configuration
 
@@ -85,8 +113,9 @@ the new global connection in this checkout. Historical evaluation templates
 remain available separately and must be applied deliberately for isolated runs.
 
 The shared instructions require project discovery, personal plus current-project
-text recall at startup and as new topics arise, explicit active scopes, reading
+recall at startup and as new topics arise, explicit active scopes, reading
 relevant hits, sources and conflict reporting, and visible nonblocking outages.
+Topic queries use hybrid search and exact lookups use text search.
 Durable findings and preferences require presenting concrete content and receiving
 explicit owner approval before saving. Temporary saves need no individual approval.
 The gate enforces terminal approval on its MCP write path.
@@ -97,8 +126,8 @@ shared AGENTS file.
 ## Verification on 17 November 2026
 
 The connection check used actual installed clients, their global configuration,
-and temporary active notes in both external projects. Model calls were allowed
-for client verification; the memory service itself uses the model-free runtime.
+and temporary active notes in both external projects. The clients used model
+calls for verification and the memory service ran in text-only mode.
 No MCP configuration was injected through CLI overrides or
 `OPENCODE_CONFIG_CONTENT`. Codex used fresh ephemeral threads; OpenCode used its
 normal `build` agent with a private local server and an existing available model.

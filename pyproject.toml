@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
-    "basic-memory==1.0.0+semantic.2",
+    "basic-memory==1.0.0+project.2",
     "configargparse>=1.7.5",
     "loguru>=0.7",
     "pydantic>=2",
@@ -29,7 +29,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-basic-memory = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-semantic.2/basic_memory-1.0.0%2Bsemantic.2-py3-none-any.whl" }
+basic-memory = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-project.2/basic_memory-1.0.0%2Bproject.2-py3-none-any.whl" }
 
 [tool.uv.build-backend]
 module-name = "shared_memory"

@@ -84,7 +84,8 @@ if mode == "approval_env":
         "UNRELATED_CLIENT_SETTING",
         "BASIC_MEMORY_AUTO_UPDATE",
         "BASIC_MEMORY_CONFIG_DIR",
-        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED",
+        "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER",
+        "BASIC_MEMORY_DEFAULT_SEARCH_TYPE",
         "BASIC_MEMORY_FORCE_LOCAL",
         "TMPDIR",
     )
@@ -736,7 +737,8 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
             "env": {
                 "APPROVAL_GATE_FAKE_MODE": "approval_env",
                 "BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "configured"),
-                "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "true",
+                "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "openai",
+                "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
                 "BASIC_MEMORY_FORCE_LOCAL": "false",
             }
         }
@@ -758,7 +760,8 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
         "UNRELATED_CLIENT_SETTING": None,
         "BASIC_MEMORY_AUTO_UPDATE": "false",
         "BASIC_MEMORY_CONFIG_DIR": str(tmp_path / "configured"),
-        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
+        "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
+        "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
         "BASIC_MEMORY_FORCE_LOCAL": "true",
         "TMPDIR": str(tmp_path),
     }

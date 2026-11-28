@@ -8,7 +8,7 @@ from pathlib import Path
 import basic_memory
 import pytest
 
-from shared_memory.runtime_build import BUILD_REVISION, PATCH, PATCH_ARGS, PROJECT_CREATE_PATCH, package_wheel, verify
+from shared_memory.runtime_build import BUILD_REVISION, PATCH_ARGS, PROJECT_CREATE_PATCH, package_wheel, verify
 
 
 def synthetic_wheel(tmp_path: Path) -> Path:
@@ -20,10 +20,8 @@ def synthetic_wheel(tmp_path: Path) -> Path:
     )
     if "enable_mcp_project_create" in (stage / "basic_memory/mcp/tools/projects.py").read_text():
         subprocess.run(
-            [*PATCH_ARGS[:-1], str(PROJECT_CREATE_PATCH), "--reverse"], cwd=stage, check=True, capture_output=True
+            [*PATCH_ARGS, "-i", str(PROJECT_CREATE_PATCH), "--reverse"], cwd=stage, check=True, capture_output=True
         )
-    if "semantic_search_enabled" in (stage / "basic_memory/config_models.py").read_text():
-        subprocess.run([*PATCH_ARGS, "--reverse"], cwd=stage, check=True, capture_output=True, text=True)
     info = stage / "basic_memory-1.0.0.dist-info"
     info.mkdir()
     (info / "METADATA").write_text("Metadata-Version: 2.4\nName: basic-memory\nVersion: 1.0.0\n")
@@ -46,22 +44,20 @@ def test_build_is_reproducible_and_applies_patch(tmp_path: Path) -> None:
     assert manifest == second_manifest
     assert json.loads((tmp_path / "one/manifest.json").read_text()) == manifest
     assert manifest["wheel_version"] == f"1.0.0+{BUILD_REVISION}"
-    assert manifest["patch_sha256"] == hashlib.sha256(PATCH.read_bytes()).hexdigest()
     assert manifest["project_create_patch_sha256"] == hashlib.sha256(PROJECT_CREATE_PATCH.read_bytes()).hexdigest()
-    assert len(manifest["patched_files"]) == 8
 
-    with zipfile.ZipFile(first) as archive:
+    with zipfile.ZipFile(first) as archive, zipfile.ZipFile(wheel) as source:
         info = f"basic_memory-1.0.0+{BUILD_REVISION}.dist-info"
         assert f"Version: 1.0.0+{BUILD_REVISION}" in archive.read(f"{info}/METADATA").decode()
         assert f"{info}/RECORD" in archive.namelist()
         project_tools = "basic_memory/mcp/tools/projects.py"
-        assert project_tools in manifest["patched_files"]
+        config = "basic_memory/config_models.py"
+        package_files = {path for path in source.namelist() if path.startswith("basic_memory/")}
+        assert package_files == {path for path in archive.namelist() if path.startswith("basic_memory/")}
+        changed = {path for path in package_files if archive.read(path) != source.read(path)}
+        assert changed == set(manifest["patched_files"]) == {config, project_tools}
         assert "enable_mcp_project_create" in archive.read(project_tools).decode()
-        assert all(
-            "semantic_search_enabled" in archive.read(path).decode()
-            for path in manifest["patched_files"]
-            if path != project_tools
-        )
+        assert "semantic_search_enabled" not in archive.read(config).decode()
 
 
 def test_verify_rejects_wheel_that_does_not_match_manifest(tmp_path: Path) -> None:

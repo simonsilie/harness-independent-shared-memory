@@ -22,9 +22,11 @@ Apply these rules to native Basic Memory through `bm_project`, `bm_search`,
   Do not expose their contents as current context, even if archival fails.
   Report unavailable maintenance briefly and continue independent work.
 - Ordinary recall searches active durable notes separately with
-  `filters={"kind":"durable","status":"active"}`. Only temporary notes that
-  passed the metadata/deadline checks may supply temporary context. A plain
-  `status: active` result is insufficient. Never widen ordinary project scopes.
+  `filters={"kind":"durable","status":"active"}`. Omit `mode` for topic
+  queries to use the hybrid default, and use `mode="text"` for exact terms.
+  Only temporary notes that passed the metadata/deadline checks may supply
+  temporary context. A plain `status: active` result is insufficient. Never
+  widen ordinary project scopes.
 - Save unfinished work without individual approval in the current project's
   temporary notes. Record where work stopped, what remains and how to resume.
   Every work update refreshes `last_activity` to current UTC; merely reading does

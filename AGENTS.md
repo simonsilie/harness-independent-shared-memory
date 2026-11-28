@@ -7,6 +7,10 @@ run clients against Basic Memory and verify they used only the allowed
 `bm_search`/`bm_read` tools, retrieved and read the right notes, and left the
 corpus bytes unchanged. `evaluation/recall/score.py` grades the results.
 
+For ordinary topic recall in this repository, omit `mode` to use the native
+hybrid search default. Use `mode="text"` for exact terms and metadata-only
+handover inventory. Keep the existing project scopes and activity filters.
+
 Write all repository documentation in English.
 Use synthetic data and placeholder paths in public documentation, tests and
 fixtures. Keep live notes, machine configuration and raw run evidence outside
@@ -63,7 +67,7 @@ others.
   test both pristine and already-patched sources. This keeps `patch --batch`
   from automatically retrying in the opposite direction and misidentifying
   pristine source as already patched (see `patches/README.md` and
-  `tests/evaluation/native/test_semantic_disable.py`).
+  `tests/evaluation/native/test_semantic_runtime_build.py`).
 - For standalone SQLite backups, close database connections and convert the
   copied snapshot to `journal_mode=DELETE` before computing its manifest.
   Verify that repeated reads and restores leave the backup unchanged: WAL/SHM
