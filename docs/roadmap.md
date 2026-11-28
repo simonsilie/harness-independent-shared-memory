@@ -25,12 +25,11 @@ enforces the rule for both launcher names.
   creation. The operator CLI created the project successfully. The integration
   suite verified reads, temporary writes, terminal approval, watcher indexing
   and text fallback against the official wheel.
-- [ ] **Roll out with owner approval.** Before switching productive clients,
-  check for project-local MCP overrides. Retain the previous launcher
-  configuration and runtime for rollback. After switching, verify each
-  client's tool inventory and approval flow in a disposable project.
+- [ ] **Roll out with owner approval.** Switch and verify all direct MCP entries,
+  including project-local overrides, before installing the official wheel.
+  Keep the previous launcher configuration and runtime for rollback.
   [Approval policy](adr/0013-technical-approval-for-durable-writes.md) ·
-  [Connection verification](client-connections.md#configuration)
+  [Migration procedure](client-connections.md#migrate-to-the-official-wheel)
 
 ## Recovery and export backlog
 

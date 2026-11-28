@@ -41,12 +41,22 @@ and `LC_CTYPE` from the launcher or owner CLI. Set any additional settings the
 native process needs, such as `BASIC_MEMORY_CONFIG_DIR`, in the gate
 configuration's `env` object. Do not put model credentials there.
 
-Before syncing the official wheel into a productive environment, keep the
-previous checkout revision, patched runtime and client entries available for
-rollback. With explicit owner approval, move any direct native MCP entries to
-the gate, preserve the client tool permissions, and restart and verify each
-client as described above. To roll back, restore the previous revision, runtime
-and client entries together.
+### Migrate to the official wheel
+
+1. Keep the previous checkout revision, patched runtime and client entries
+   available for rollback. With explicit owner approval, switch all direct MCP
+   entries to `shared-memory-approval-gate` while still on the previous revision
+   and patched runtime. Include project-local overrides and entries that use the
+   old `shared-memory-mcp` launcher. Preserve the client tool permissions.
+2. Restart each affected client and check its effective launcher and project
+   listing. In a disposable store, verify that `bm_project` refuses project
+   creation and a durable write returns an approval proposal without saving
+   the note.
+3. After those checks pass, update the checkout and install the official wheel
+   with `uv sync --locked`. Restart the clients and repeat the checks.
+
+For rollback, restore the previous checkout revision and patched runtime before
+restoring any direct MCP entries, then restart the affected clients.
 
 ## Build embeddings for an existing store
 

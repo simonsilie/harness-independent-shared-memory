@@ -145,9 +145,9 @@ client to find it. For daily use, give each client the
 [same recall and write instructions](docs/client-connections.md#tool-surface-and-instructions)
 and the [handover lifecycle rules](docs/shared-memory-lifecycle.md).
 
-Existing `shared-memory-mcp` entries also start the gate. Check existing client
-entries and local overrides before switching an installation to the official
-wheel. [Launcher migration](docs/client-connections.md#launchers)
+In this checkout, `shared-memory-mcp` also starts the gate. When upgrading an
+existing installation, switch and verify all direct MCP entries before
+installing the official wheel. [Launcher migration](docs/client-connections.md#migrate-to-the-official-wheel)
 
 ## Architecture and evaluation
 
