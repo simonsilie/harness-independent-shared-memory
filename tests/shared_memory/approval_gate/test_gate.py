@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import signal
 import stat
 import subprocess
 import sys
@@ -70,12 +72,15 @@ FAKE_NATIVE = r"""
 import hashlib
 import json
 import os
+import signal
 import sys
 import time
 from pathlib import Path
 
 log = open(sys.argv[1], "a")
 mode = os.getenv("APPROVAL_GATE_FAKE_MODE")
+if mode == "proxy_shutdown":
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
 target = None
 projects = [{
     "name": "personal",
@@ -126,6 +131,8 @@ for line in sys.stdin:
     if "id" in message:
         sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}) + "\n")
         sys.stdout.flush()
+if mode == "proxy_shutdown":
+    time.sleep(60)
 if target is not None:
     if mode == "shutdown":
         time.sleep(60)
@@ -615,6 +622,59 @@ def test_integration_pending_write_does_not_hold_up_later_messages(tmp_path, nat
         process.wait(timeout=5)
 
     assert first["id"] == 2 and not first["result"]["isError"]
+
+
+@pytest.mark.parametrize("mode", ["normal", "proxy_shutdown", "bm_project"])
+def test_integration_proxy_shutdown_on_client_eof(tmp_path, native, mode):
+    config = make_config(tmp_path, native[0]).model_copy(update={"env": {"APPROVAL_GATE_FAKE_MODE": mode}})
+    config_path = tmp_path / "config.json"
+    config_path.write_text(config.model_dump_json())
+    identifier = "temporary/handover.md"
+    content = temporary_content()
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "bm_write",
+            "arguments": {"content": content, "identifier": identifier, "project": "personal"},
+        },
+    }
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "from shared_memory.approval_gate import native, proxy; "
+            "native.SHUTDOWN_TIMEOUT = 1; raise SystemExit(proxy.main())",
+            "--config",
+            str(config_path),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(json.dumps(request) + "\n", timeout=10)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate(timeout=5)
+        raise
+
+    if mode == "bm_project":
+        assert process.returncode != 0
+        assert not stdout
+        assert "Timed out draining pending writes" in stderr
+        return
+
+    assert not json.loads(stdout)["result"]["isError"]
+    if mode == "normal":
+        assert process.returncode == 0
+        assert (tmp_path / identifier).read_text() == content
+    else:
+        assert process.returncode != 0
+        assert "timed out during graceful shutdown" in stderr
 
 
 @pytest.mark.parametrize(
