@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 import sqlite_vec
 
+from shared_memory.approval_gate import ProposalError
+from shared_memory.approval_gate.approvals import approve
+from shared_memory.approval_gate.config import Config
+from shared_memory.approval_gate.proposals import audit, create_or_reuse
+from shared_memory.approval_gate.writes import ProjectListing
 from shared_memory.ops import backup, inventory, recovery, restore
 
 
@@ -46,6 +51,178 @@ def store(tmp_path, note_suffix):
                 (filename, body, hashlib.sha256(body.encode()).hexdigest()),
             )
     return source
+
+
+def add_approval_state(store: Path) -> dict[str, str]:
+    approvals = store / "approvals"
+    approvals.mkdir()
+    (approvals / ".lock").touch()
+    proposals = {}
+    events = []
+    for status in ("pending", "applying", "outcome_unknown", "approved"):
+        proposal_id = hashlib.sha256(status.encode()).hexdigest()[:32]
+        content = f"Proposal content for {status}\n"
+        proposal = {
+            "id": proposal_id,
+            "status": status,
+            "created_at": "2026-11-27T10:00:00Z",
+            "expires_at": "2099-01-01T00:00:00Z",
+            "project": "personal",
+            "project_external_id": "00000000-0000-0000-0000-000000000001",
+            "content": content,
+            "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "source": None,
+            "arguments": {
+                "project": "00000000-0000-0000-0000-000000000001",
+                "identifier": f"durable/{status}.md",
+                "content": content,
+                "overwrite": False,
+            },
+        }
+        (approvals / f"{proposal_id}.json").write_text(json.dumps(proposal, indent=2, sort_keys=True) + "\n")
+        proposals[status] = proposal_id
+        events.append(
+            json.dumps(
+                {
+                    "timestamp": "2026-11-27T10:00:00Z",
+                    "event": "proposal_created",
+                    "proposal_id": proposal_id,
+                    "project": "personal",
+                },
+                sort_keys=True,
+            )
+        )
+    (store / "approval-audit.jsonl").write_text("\n".join(events) + "\n")
+    return proposals
+
+
+def test_round_trip_retains_approval_evidence_and_closes_pending(store, tmp_path):
+    proposal_ids = add_approval_state(store)
+    archive, target = tmp_path / "backup", tmp_path / "restored"
+
+    backup(store, archive)
+    restore(archive, target)
+
+    assert (target / "approval-audit.jsonl").read_bytes() == (store / "approval-audit.jsonl").read_bytes()
+    manifest = json.loads((archive / "manifest.json").read_text())
+    assert "approval-audit.jsonl" in manifest["files"]
+    assert f"approvals/{proposal_ids['pending']}.json" in manifest["files"]
+
+    restored = {
+        status: json.loads((target / "approvals" / f"{proposal_id}.json").read_text())
+        for status, proposal_id in proposal_ids.items()
+    }
+    assert {status: proposal["status"] for status, proposal in restored.items()} == {
+        "pending": "closed_by_recovery",
+        "applying": "applying",
+        "outcome_unknown": "outcome_unknown",
+        "approved": "approved",
+    }
+    assert restored["pending"]["closed_from_status"] == "pending"
+    assert restored["pending"]["closed_at"]
+
+    config = Config(
+        native_command=["/bin/false"],
+        proposals_dir=target / "approvals",
+        audit_log=target / "approval-audit.jsonl",
+    )
+
+    def must_not_confirm(*_):
+        pytest.fail("a recovered proposal must not reach confirmation")
+
+    for status in ("pending", "applying", "outcome_unknown"):
+        with pytest.raises(ProposalError, match="already"):
+            approve(config, proposal_ids[status], must_not_confirm)
+    assert not (target / "notes/personal/durable").exists()
+
+
+def test_recovery_does_not_reuse_closed_or_uncertain_proposals(store, tmp_path):
+    proposal_ids = add_approval_state(store)
+    archive, target = tmp_path / "backup", tmp_path / "restored"
+    backup(store, archive)
+    restore(archive, target)
+
+    config = Config(
+        native_command=["/bin/false"],
+        proposals_dir=target / "approvals",
+        audit_log=target / "approval-audit.jsonl",
+    )
+    listing: ProjectListing = {
+        "projects": [{"name": "personal", "external_id": "00000000-0000-0000-0000-000000000001"}]
+    }
+    for status in ("pending", "applying", "outcome_unknown"):
+        arguments = json.loads((target / "approvals" / f"{proposal_ids[status]}.json").read_text())["arguments"]
+        proposal, created = create_or_reuse(config, arguments, listing)
+        assert created
+        assert proposal["id"] != proposal_ids[status]
+        assert json.loads((target / "approvals" / f"{proposal_ids[status]}.json").read_text())["status"] != "pending"
+
+
+def test_backup_refuses_malformed_proposal(store, tmp_path):
+    approvals = store / "approvals"
+    approvals.mkdir()
+    (approvals / "broken.json").write_text("{not json")
+
+    with pytest.raises(ValueError, match="Invalid approval proposal"):
+        backup(store, tmp_path / "backup")
+
+    assert not (tmp_path / "backup").exists()
+
+
+def test_backup_refuses_malformed_audit_log(store, tmp_path):
+    (store / "approval-audit.jsonl").write_text("not json\n")
+
+    with pytest.raises(ValueError, match="Invalid approval audit record"):
+        backup(store, tmp_path / "backup")
+
+    assert not (tmp_path / "backup").exists()
+
+
+def test_backup_refuses_first_proposal_created_during_copy(store, tmp_path, monkeypatch):
+    config = Config(
+        native_command=["/bin/false"],
+        proposals_dir=store / "approvals",
+        audit_log=store / "approval-audit.jsonl",
+    )
+    config.proposals_dir.mkdir()
+    project_id = "00000000-0000-0000-0000-000000000001"
+    listing: ProjectListing = {"projects": [{"name": "personal", "external_id": project_id}]}
+    copy_tree = recovery._copy_tree_fd
+
+    def copy_then_submit(fd, destination):
+        copy_tree(fd, destination)
+        if destination.name == "approvals":
+            create_or_reuse(
+                config,
+                {"project": project_id, "identifier": "durable/example.md", "content": "Synthetic proposal"},
+                listing,
+            )
+
+    archive = tmp_path / "backup"
+    with monkeypatch.context() as patch:
+        patch.setattr(recovery, "_copy_tree_fd", copy_then_submit)
+        with pytest.raises(ValueError, match="Approval state was initialized during backup"):
+            backup(store, archive)
+    assert not archive.exists()
+
+    (proposal_path,) = config.proposals_dir.glob("*.json")
+    backup(store, archive)
+    assert (archive / "approvals" / proposal_path.name).read_bytes() == proposal_path.read_bytes()
+    assert (archive / "approval-audit.jsonl").read_bytes() == config.audit_log.read_bytes()
+
+
+def test_round_trip_preserves_unicode_line_separator_in_audit_record(store, tmp_path):
+    config = Config(
+        native_command=["/bin/false"],
+        proposals_dir=store / "approvals",
+        audit_log=store / "approval-audit.jsonl",
+    )
+    audit(config, "proposal_created", source="First\u2028second")
+    archive, target = tmp_path / "backup", tmp_path / "restored"
+    backup(store, archive)
+    restore(archive, target)
+
+    assert (target / "approval-audit.jsonl").read_bytes() == config.audit_log.read_bytes()
 
 
 @pytest.mark.parametrize("note_suffix", [".md", ".markdown", ".MARKDOWN"])

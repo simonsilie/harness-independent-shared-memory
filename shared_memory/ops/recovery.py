@@ -1,4 +1,4 @@
-"""Same-version backup and isolated restore of a local Basic Memory store."""
+"""Same-version backup and isolated restore of a local Basic Memory store and its approval state."""
 
 import errno
 import fcntl
@@ -10,11 +10,15 @@ import sqlite3
 import stat
 import tempfile
 from collections.abc import Callable
-from contextlib import closing, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from basic_memory.runtime.storage import runtime_file_path_is_markdown_note
+
+APPROVAL_DIRECTORY = "approvals"
+APPROVAL_AUDIT_LOG = "approval-audit.jsonl"
+CLOSED_BY_RECOVERY = "closed_by_recovery"
 
 
 def digest(path: Path) -> str:
@@ -110,12 +114,52 @@ def _copy_file(fd: int, target: Path) -> None:
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
+    with _closing_fd(os.open(source, _OPEN_FLAGS | os.O_DIRECTORY)) as fd:
+        _copy_tree_fd(fd, destination)
+
+
+def _copy_tree_fd(fd: int, destination: Path) -> None:
     destination.mkdir(mode=0o700, parents=True, exist_ok=True)
-    _walk(
-        source,
+    _walk_fd(
+        fd,
+        Path(),
         lambda relative: (destination / relative).mkdir(mode=0o700, parents=True, exist_ok=True),
-        lambda relative, fd: _copy_file(fd, destination / relative),
+        lambda relative, child_fd: _copy_file(child_fd, destination / relative),
     )
+
+
+def _open_optional(stack: ExitStack, parent_fd: int, name: str, *, directory: bool = False) -> int | None:
+    try:
+        is_directory, fd = _open_entry(parent_fd, name, Path(name))
+    except FileNotFoundError:
+        return None
+    stack.enter_context(_closing_fd(fd))
+    if is_directory != directory:
+        expected = "directory" if directory else "file"
+        raise ValueError(f"Expected a {expected} in store: {name}")
+    return fd
+
+
+def _copy_approval_state(source: Path, staging: Path) -> None:
+    with ExitStack() as stack:
+        root_fd = stack.enter_context(_closing_fd(os.open(source, _OPEN_FLAGS | os.O_DIRECTORY)))
+        proposals_fd = _open_optional(stack, root_fd, APPROVAL_DIRECTORY, directory=True)
+        lock_fd = None if proposals_fd is None else _open_optional(stack, proposals_fd, ".lock")
+        if lock_fd is not None:
+            fcntl.flock(lock_fd, fcntl.LOCK_SH)
+        audit_fd = _open_optional(stack, root_fd, APPROVAL_AUDIT_LOG)
+        if audit_fd is not None:
+            fcntl.flock(audit_fd, fcntl.LOCK_SH)
+        if proposals_fd is not None:
+            _copy_tree_fd(proposals_fd, staging / APPROVAL_DIRECTORY)
+        if audit_fd is not None:
+            _copy_file(audit_fd, staging / APPROVAL_AUDIT_LOG)
+        # The first gate writer creates the proposal lock before changing proposals.
+        if lock_fd is None:
+            if proposals_fd is None:
+                proposals_fd = _open_optional(stack, root_fd, APPROVAL_DIRECTORY, directory=True)
+            if proposals_fd is not None and _open_optional(stack, proposals_fd, ".lock") is not None:
+                raise ValueError("Approval state was initialized during backup; retry into a new destination")
 
 
 def validate_notes(root: Path, *, destination: Path | None = None) -> None:
@@ -150,6 +194,49 @@ def validate_notes(root: Path, *, destination: Path | None = None) -> None:
                 raise ValueError(f"Unindexed or missing Markdown in {project['name']}")
 
 
+def validate_approval_state(root: Path) -> None:
+    audit = root / APPROVAL_AUDIT_LOG
+    if audit.exists():
+        for line in audit.read_text(encoding="utf-8").split("\n"):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"Invalid approval audit record: {error}") from error
+            if not isinstance(record, dict):
+                raise ValueError("Approval audit record is not an object")
+    proposals = root / APPROVAL_DIRECTORY
+    if not proposals.exists():
+        return
+    for path in sorted(proposals.glob("*.json")):
+        try:
+            proposal = json.loads(path.read_text())
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid approval proposal {path.name}: {error}") from error
+        if (
+            not isinstance(proposal, dict)
+            or proposal.get("id") != path.stem
+            or not isinstance(proposal.get("status"), str)
+        ):
+            raise ValueError(f"Invalid approval proposal {path.name}")
+
+
+def close_open_proposals(root: Path) -> None:
+    """Close pending proposals so a restored snapshot cannot replay them."""
+    proposals = root / APPROVAL_DIRECTORY
+    if not proposals.exists():
+        return
+    for path in sorted(proposals.glob("*.json")):
+        proposal = json.loads(path.read_text())
+        if proposal.get("status") != "pending":
+            continue
+        proposal["status"] = CLOSED_BY_RECOVERY
+        proposal["closed_from_status"] = "pending"
+        proposal["closed_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        path.write_text(json.dumps(proposal, indent=2, sort_keys=True) + "\n")
+
+
 def backup(source: Path, destination: Path) -> None:
     source, destination = source.resolve(), destination.resolve()
     if destination.is_relative_to(source):
@@ -165,6 +252,9 @@ def backup(source: Path, destination: Path) -> None:
     staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent))
     try:
         (staging / "state").mkdir(mode=0o700)
+        # Capture approval state first: an approved proposal must predate the database
+        # snapshot, so its note is included there.
+        _copy_approval_state(source, staging)
         with (
             read_database(source / "state/memory.db") as live,
             closing(sqlite3.connect(staging / "state/memory.db")) as copy,
@@ -197,6 +287,7 @@ def backup(source: Path, destination: Path) -> None:
         if config_path.read_bytes() != config_bytes:
             raise ValueError("Configuration changed during backup; retry into a new destination")
         validate_notes(staging)
+        validate_approval_state(staging)
         sidecars = sorted(path.name for path in (staging / "state").glob("memory.db-*"))
         if sidecars:
             raise ValueError(f"Unexpected snapshot sidecars: {', '.join(sidecars)}")
@@ -240,6 +331,7 @@ def restore(archive: Path, destination: Path, *, expected_manifest_digest: str |
         if actual != manifest["files"]:
             raise ValueError("Backup manifest mismatch")
         validate_notes(staging)
+        validate_approval_state(staging)
         config_path = staging / "state/config.json"
         config = json.loads(config_path.read_text())
         with closing(sqlite3.connect(staging / "state/memory.db")) as connection, connection:
@@ -248,6 +340,7 @@ def restore(archive: Path, destination: Path, *, expected_manifest_digest: str |
                 project["path"] = str(destination / relative)
                 connection.execute("UPDATE project SET path=? WHERE name=?", (project["path"], name))
         config_path.write_text(json.dumps(config, indent=2) + "\n")
+        close_open_proposals(staging)
         validate_notes(staging, destination=destination)
         staging.rename(destination)
     except BaseException:

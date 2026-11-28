@@ -194,7 +194,10 @@ def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     assert list_proposals(config)[0]["status"] == "pending"
     assert not target.exists()
     assert not (root / "notes/alpha/durable/decision.md").exists()
-    assert cli.command_approve(config, proposal["id"], confirm=lambda _: True) == 0
+    cache = root / "empty-model-cache"
+    cache.mkdir()
+    approval_config = config.model_copy(update={"env": (config.env or {}) | {"FASTEMBED_CACHE_PATH": str(cache)}})
+    assert cli.command_approve(approval_config, proposal["id"], confirm=lambda _: True) == 0
 
     assert target.exists()
     assert target.read_text().startswith("---\ntitle: Gated decision")

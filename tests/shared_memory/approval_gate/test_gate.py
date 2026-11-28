@@ -87,6 +87,7 @@ if mode == "approval_env":
         "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER",
         "BASIC_MEMORY_DEFAULT_SEARCH_TYPE",
         "BASIC_MEMORY_FORCE_LOCAL",
+        "HF_HUB_OFFLINE",
         "TMPDIR",
     )
     log.write(json.dumps({"env": {key: os.getenv(key) for key in keys}}) + "\n")
@@ -740,6 +741,7 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
                 "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "openai",
                 "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
                 "BASIC_MEMORY_FORCE_LOCAL": "false",
+                "HF_HUB_OFFLINE": "0",
             }
         }
     )
@@ -763,6 +765,7 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
         "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
         "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
         "BASIC_MEMORY_FORCE_LOCAL": "true",
+        "HF_HUB_OFFLINE": "1",
         "TMPDIR": str(tmp_path),
     }
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
