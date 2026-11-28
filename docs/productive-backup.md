@@ -10,7 +10,7 @@ is covered separately in [portable export](portable-export.md).
 
 ## Procedure
 
-Use the existing patched Basic Memory 1.0.0 project environment. From this checkout,
+Use the locked Basic Memory 1.0.0 project environment. From this checkout,
 choose a fresh identifier for each backup and run:
 
 ```sh
@@ -49,8 +49,7 @@ cannot mutate WAL/SHM files covered by the manifest. Project paths in its databa
 and effective configuration are relative to the snapshot root; the original
 configuration is retained separately as `state/config.original.json`. All native
 tables, identities, history and lifecycle frontmatter are retained. The snapshot
-is for same-version recovery with the installed patch, not a portable export or
-a guarantee of cross-version compatibility.
+is for same-version recovery. Use OKF for portable export across implementations.
 
 Restore only into a new, separate destination:
 

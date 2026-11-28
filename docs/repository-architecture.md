@@ -10,7 +10,6 @@ to historical plans and evidence.
 shared_memory/
   ops/                       native backup, restore and portable export
   approval_gate/             stdio MCP proxy and owner approval CLI
-  runtime_build.py           pinned Basic Memory wheel build and verification
 evaluation/
   bm                         experiment-only Basic Memory launcher
   corpus/                    reviewed experiment notes
@@ -82,26 +81,26 @@ Keep raw-evidence verification separate from scoring.
 ## Native runtime and verification
 
 The [quickstart](../README.md#connect-your-coding-agent) shows how to enable the
-optional `shared-memory-approval-gate` (`shared_memory.approval_gate.proxy`), which starts the
-native Basic Memory server. `shared-memory-mcp` starts that server directly.
-Both launchers use Basic Memory's local embeddings and hybrid search for topic
+`shared-memory-approval-gate` launcher, which starts the official Basic Memory
+server behind the proxy. `shared-memory-mcp` is an alias for the same gate.
+The server uses local embeddings and hybrid search for topic
 recall. See [ADR 0014](adr/0014-native-local-embeddings.md).
 The proxy forwards reads and eligible temporary writes. For a durable write it
 returns a proposal that the owner reviews and confirms with `shared_memory.approval_gate.cli`.
-Direct connections use chat approval. See
-[ADR 0013](adr/0013-technical-approval-for-durable-writes.md) for the write
-policy and the rollout decision.
+The gate also keeps project creation in the operator CLI by allowing only
+`list` and `recent` on `bm_project`. See
+[ADR 0013](adr/0013-technical-approval-for-durable-writes.md) for the write policy.
 
-`shared_memory/ops/` and the evaluation harnesses use the native runtime. It implements
-backup, restore and OKF export. `shared_memory/runtime_build.py` builds the patched
-wheel and invokes `evaluation/native/mcp_watcher.py` to verify it.
+`shared_memory/ops/` and the evaluation harnesses use the native runtime.
+The operations package provides backup and restore and calls the native CLI
+for OKF export.
 
 `evaluation/native/mcp_server_guard.py` blocks inference imports and outbound
 Python sockets in disposable child processes. The MCP/watcher probe checks
 startup, writes, scoped text fallback, semantic-query refusal, external-file
 indexing, idle operation and restart with the vector runtime unavailable. Tests
-cover the opt-in for MCP project creation and reproducible construction of the
-patched wheel.
+cover project discovery and refusal of project creation through both gate
+launcher names, plus project creation through the operator CLI.
 
 The native conditional-write and coverage probes use that guard without any
 `workflow` import. Actual-client behavior and temporary context remain under

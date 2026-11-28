@@ -5,7 +5,6 @@ imports here lets `tests/shared_memory/approval_gate/test_basic_memory_api.py` p
 behavior the gate relies on, so an upgrade fails there with a targeted test.
 """
 
-from basic_memory.config_models import BasicMemoryConfig
 from basic_memory.file_utils import ParseError, has_frontmatter, parse_frontmatter
 from basic_memory.mcp.project_context_identifiers import split_project_permalink_prefix
 from basic_memory.mcp.tool_params import ProjectById, parse_project
@@ -15,7 +14,6 @@ from basic_memory.utils import coerce_dict, generate_permalink, resolve_path_wit
 
 __all__ = [
     "RUNTIME_MARKDOWN_FILE_SUFFIXES",
-    "BasicMemoryConfig",
     "ParseError",
     "ProjectById",
     "coerce_dict",

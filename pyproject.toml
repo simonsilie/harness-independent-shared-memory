@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
-    "basic-memory==1.0.0+project.2",
+    "basic-memory==1.0.0",
     "configargparse>=1.7.5",
     "loguru>=0.7",
     "pydantic>=2",
@@ -28,14 +28,10 @@ dev = [
     "pytest>=9.2.0",
 ]
 
-[tool.uv.sources]
-basic-memory = { url = "https://github.com/simonsilie/harness-independent-shared-memory/releases/download/basic-memory-project.2/basic_memory-1.0.0%2Bproject.2-py3-none-any.whl" }
-
 [tool.uv.build-backend]
 module-name = "shared_memory"
 module-root = ""
 source-exclude = ["/shared_memory/approval_gate/config.json", "/build/.verify-venv/**", "/build/dist/**"]
-wheel-exclude = ["shared_memory/runtime_build.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

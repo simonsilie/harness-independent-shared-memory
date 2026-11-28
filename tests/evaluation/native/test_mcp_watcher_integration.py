@@ -3,9 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from shared_memory.runtime_build import WATCHER
-
 ROOT = Path(__file__).resolve().parents[3]
+WATCHER = ROOT / "evaluation/native/mcp_watcher.py"
 
 
 def test_mcp_watcher_and_restart_with_keyword_fallback():

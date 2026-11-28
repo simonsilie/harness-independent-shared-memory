@@ -20,7 +20,7 @@ matches with embeddings generated locally by FastEmbed.
   and exact lookups use text search.
   [Client instructions](docs/client-connections.md#tool-surface-and-instructions) ·
   [Handover lifecycle](docs/shared-memory-lifecycle.md)
-- **Optional terminal approval.** The MCP gate sends durable writes to the owner
+- **Terminal approval.** The MCP gate sends durable writes to the owner
   for review and confirmation, while eligible temporary handovers can be saved
   directly. The gate guards its MCP write path. Its protection depends on the
   client's shell and filesystem permissions.
@@ -32,22 +32,17 @@ matches with embeddings generated locally by FastEmbed.
   [Backup and restore](docs/productive-backup.md) ·
   [Portable export](docs/portable-export.md)
 
-Use Basic Memory directly if you need its broader MCP tool set.
-[Basic Memory MCP tools](https://docs.basicmemory.com/reference/mcp-tools-reference)
-
 ## Quick start
 
 From a fresh checkout on macOS or Linux, sync the locked environment with `uv`.
-The checkout selects Python 3.14. Both `uv sync` and `uv run` use the patched
-Basic Memory wheel from the lockfile.
+The checkout selects Python 3.14 and pins the official Basic Memory release.
 
 ```sh
 uv sync --locked
 ```
 
-Run a command with `--help` to see its environment variables. For example,
-`SHARED_MEMORY_RUNTIME_OUT=build/dist uv run --locked python shared_memory/runtime_build.py build`
-sets the output directory. Command-line arguments take precedence.
+Run a command with `--help` to see its environment variables. Command-line
+arguments take precedence.
 `LOGURU_LEVEL` controls which status messages appear on stderr.
 
 Run the setup script from the repository root to create a private
@@ -62,8 +57,8 @@ For an existing store, [build embeddings for existing notes](docs/client-connect
 
 ### Connect your coding agent
 
-Both connection modes use the same configuration. Copy the template from the
-repository root if you have no local configuration yet.
+Copy the configuration template from the repository root if you have no local
+configuration yet.
 
 ```sh
 cp shared_memory/approval_gate/config.example.json shared_memory/approval_gate/config.json
@@ -74,9 +69,8 @@ and store. The proxy and the owner CLI share this configuration, including
 `BASIC_MEMORY_CONFIG_DIR`. The launcher uses the environment created by
 `uv sync --locked` during setup.
 
-The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
-available for discovery and reserves project creation for the operator by
-default. Add a project to this store with its notes directory under `~/SharedMemory`.
+The gate keeps `bm_project` available for discovery and recent activity.
+Add projects through the CLI with their notes directories under `~/SharedMemory`.
 
 ```sh
 BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state" BASIC_MEMORY_FORCE_LOCAL=true \
@@ -144,17 +138,16 @@ Keep existing rules and check the effective tool list after updating Basic Memor
 ```
 
 Start fresh sessions and check that each configured client lists `personal` and
-`example` with `bm_project`. With the gate enabled, ask one client to propose a
+`example` with `bm_project`. Ask one client to propose a
 short durable test note in `example`. Run the command returned with the proposal
 in your own terminal, review the note and confirm it there. Then ask another
 client to find it. For daily use, give each client the
 [same recall and write instructions](docs/client-connections.md#tool-surface-and-instructions)
 and the [handover lifecycle rules](docs/shared-memory-lifecycle.md).
 
-To connect directly, replace `shared-memory-approval-gate` with
-`shared-memory-mcp` in the client command and keep the same client tool
-permissions. In this mode, confirm durable writes in chat.
-See [how to select the launcher](docs/client-connections.md#launchers).
+Existing `shared-memory-mcp` entries also start the gate. Check existing client
+entries and local overrides before switching an installation to the official
+wheel. [Launcher migration](docs/client-connections.md#launchers)
 
 ## Architecture and evaluation
 
@@ -162,4 +155,5 @@ The repository includes a separate read-only corpus and runners for Codex,
 OpenCode and Claude Code. They verify which memory tools each client used, which
 notes it retrieved and read, and whether the corpus was left intact.
 [Repository architecture](docs/repository-architecture.md) ·
+[Architecture roadmap](docs/roadmap.md) ·
 [Recorded recall results](docs/archive/evaluation-results.md)

@@ -7,6 +7,7 @@ defines Markdown as authoritative and embeddings as a rebuildable index.
 Use text search for exact terms, metadata-only handover inventory and the
 read-only recall experiment.
 
-The runtime wheel carries the MCP project-creation patch. Historical text-only
-checks can be reproduced from the revision recorded in the
+Use the official Basic Memory wheel. The MCP approval gate controls project
+creation independently of the search runtime. Historical text-only checks can be
+reproduced from the revision recorded in the
 [model-free operation report](../archive/model-free-operation.md).
