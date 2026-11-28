@@ -39,7 +39,6 @@ def store(tmp_path, monkeypatch):
         "database_backend": "sqlite",
         "database_url": None,
         "default_search_type": "text",
-        "semantic_search_enabled": False,
         "auto_update": False,
         "logfire_enabled": False,
     }
@@ -48,7 +47,6 @@ def store(tmp_path, monkeypatch):
         "BASIC_MEMORY_CONFIG_DIR": str(state),
         "BASIC_MEMORY_HOME": str(personal),
         "BASIC_MEMORY_FORCE_LOCAL": "true",
-        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
         "BASIC_MEMORY_AUTO_UPDATE": "false",
         "FASTMCP_CHECK_FOR_UPDATES": "off",
         "HF_HUB_OFFLINE": "1",

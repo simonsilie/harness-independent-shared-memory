@@ -47,7 +47,7 @@ def setup(out, client):
                 "projects": projects,
                 "default_project": ROOT.name,
                 "database_backend": "sqlite",
-                "semantic_search_enabled": False,
+                "default_search_type": "text",
             }
         )
     )
@@ -55,9 +55,9 @@ def setup(out, client):
         "BASIC_MEMORY_CONFIG_DIR": str(state),
         "BASIC_MEMORY_HOME": str(base / "personal"),
         "BASIC_MEMORY_FORCE_LOCAL": "true",
-        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
         "BASIC_MEMORY_AUTO_UPDATE": "false",
         "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
+        "HF_HUB_OFFLINE": "1",
         "WATCHFILES_FORCE_POLLING": "true",
     }
 

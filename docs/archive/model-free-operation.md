@@ -6,6 +6,9 @@ below are retained as evidence. The subsequently approved local installation
 passes model-free checks; see [installation verification](#approved-local-installation).
 No productive configuration was changed.
 
+Reproduce the patch and commands below from the
+[last text-only source revision](https://github.com/simonsilie/harness-independent-shared-memory/tree/4fae58dfca94af60a602c7a69b24a7590d5b7d4c).
+
 ## Initial unmodified-package result
 
 The installed candidate does not provide a verified global configuration for
@@ -72,7 +75,7 @@ until the patched installation below satisfied the complete model-free requireme
 
 ## Local implementation prepared for review
 
-The [semantic-disable patch](../../patches/basic-memory-semantic-disable.patch) adds
+The [semantic-disable patch](https://github.com/simonsilie/harness-independent-shared-memory/blob/4fae58dfca94af60a602c7a69b24a7590d5b7d4c/patches/basic-memory-semantic-disable.patch) adds
 `semantic_search_enabled` (default `true`) and the corresponding
 `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED` environment setting. Setting it to `false`
 skips provider construction, vector setup, reranking and background vector sync;

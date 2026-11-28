@@ -8,9 +8,9 @@ from shared_memory.runtime_build import WATCHER
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_model_free_mcp_watcher_and_restart():
+def test_mcp_watcher_and_restart_with_keyword_fallback():
     result = subprocess.run(
-        [sys.executable, str(WATCHER), "--semantic-disabled"],
+        [sys.executable, str(WATCHER)],
         cwd=ROOT,
         env=os.environ | {"WATCHFILES_FORCE_POLLING": "true"},
         capture_output=True,

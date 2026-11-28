@@ -1,8 +1,6 @@
 import asyncio
 import json
 import os
-import shutil
-import sqlite3
 import subprocess
 import sys
 import time
@@ -29,9 +27,7 @@ if expected_version is None:
     assert installed_version.partition("+")[0] == "1.0.0"
 else:
     assert installed_version == expected_version
-installed_semantic_disabled = "--installed-semantic-disabled" in sys.argv
-installed = installed_semantic_disabled or "--installed" in sys.argv
-semantic_disabled = installed_semantic_disabled or "--semantic-disabled" in sys.argv
+installed = "--installed" in sys.argv
 before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
 state = OUT / "state"
 corpus = OUT / "corpus"
@@ -44,11 +40,6 @@ corpus.mkdir()
             "default_project": "main",
             "database_backend": "sqlite",
             "database_url": None,
-            **(
-                {"semantic_search_enabled": False, "default_search_type": "hybrid", "reranker_enabled": True}
-                if semantic_disabled
-                else {}
-            ),
         }
     )
     + "\n"
@@ -80,44 +71,6 @@ env.update(
     }
 )
 SERVER = Path(__file__).with_name("mcp_server_guard.py")
-vector_runtime_version = None
-if semantic_disabled:
-    import sqlite_vec
-
-    with sqlite3.connect(":memory:") as connection:
-        connection.enable_load_extension(True)
-        connection.load_extension(sqlite_vec.loadable_path())
-        vector_runtime_version = connection.execute("SELECT vec_version()").fetchone()[0]
-
-    if not installed:
-        package_root = OUT / "package"
-        shutil.copytree(
-            Path(basic_memory.__file__).parent,
-            package_root / "basic_memory",
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
-        patch_args = [
-            "patch",
-            "--batch",
-            "--force",
-            "--fuzz=0",
-            "-p1",
-            "-i",
-            str(ROOT / "patches/basic-memory-semantic-disable.patch"),
-        ]
-        existing = subprocess.run(
-            [*patch_args, "--reverse", "--dry-run"],
-            cwd=package_root,
-            capture_output=True,
-            text=True,
-        )
-        if existing.returncode == 0:
-            (OUT / "patch.stdout").write_text("Installed source already contains the patch.\n" + existing.stdout)
-        else:
-            applied = subprocess.run(patch_args, cwd=package_root, capture_output=True, text=True, check=True)
-            (OUT / "patch.stdout").write_text(applied.stdout)
-        env["PYTHONPATH"] = str(package_root)
-saved = 0
 
 
 def dump(name, payload):
@@ -126,7 +79,6 @@ def dump(name, payload):
 
 
 async def call(session, name, tool, arguments, expect_error=False):
-    global saved
     result = await asyncio.wait_for(session.call_tool(tool, arguments), 180)
     text = "".join(block.text for block in result.content if hasattr(block, "text"))
     try:
@@ -146,11 +98,7 @@ def server_params(name):
     return StdioServerParameters(
         command=sys.executable,
         args=[str(SERVER), "mcp", "--transport", "stdio", "--project", "main"],
-        env=env
-        | {
-            "PHASE1B_GUARD_PATH": str(OUT / f"{name}.guard.json"),
-            "PHASE1B_ALLOW_SQLITE_VEC": "1" if semantic_disabled or "--installed-semantic-stack" in sys.argv else "0",
-        },
+        env=env | {"PHASE1B_GUARD_PATH": str(OUT / f"{name}.guard.json")},
     )
 
 
@@ -195,21 +143,13 @@ async def phase1(session):
     )
     lowered = vector.lower()
     assert "semantic" in lowered or "sqlite-vec" in lowered, vector
-    if semantic_disabled:
-        await call(
-            session,
-            "hybrid-mode-refused",
-            "bm_search",
-            {"query": "mcpwatchertoken", "project": "main", "mode": "hybrid", "output_format": "json"},
-            expect_error=True,
-        )
-        scoped = await call(
-            session,
-            "scoped-default-search",
-            "bm_search",
-            {"query": "mcpwatchertoken", "projects": ["main"], "output_format": "json"},
-        )
-        assert [row["permalink"] for row in scoped["results"]] == ["main/watcher"], scoped
+    scoped = await call(
+        session,
+        "scoped-default-search",
+        "bm_search",
+        {"query": "mcpwatchertoken", "projects": ["main"], "output_format": "json"},
+    )
+    assert [row["permalink"] for row in scoped["results"]] == ["main/watcher"], scoped
     # Watcher evidence: an external file edit that no client wrote.
     (corpus / "observed.md").write_text("---\ntitle: Observed file\n---\nwatcherfiletoken\n")
     deadline = time.monotonic() + 120
@@ -250,11 +190,11 @@ async def phase2(session):
 asyncio.run(with_session("server-1", phase1))
 asyncio.run(with_session("server-2", phase2))
 
-# Disabled semantics must ignore an unusable provider; enabled mode still rejects it.
 crash = subprocess.run(
     [
         sys.executable,
-        *([str(SERVER)] if semantic_disabled else ["-c", "from basic_memory.cli.main import app; app()"]),
+        "-c",
+        "from basic_memory.cli.main import app; app()",
         "tool",
         "search",
         "mcpwatchertoken",
@@ -262,41 +202,22 @@ crash = subprocess.run(
         "main",
     ],
     cwd=OUT,
-    env=env
-    | {
-        "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "none",
-        **(
-            {"PHASE1B_GUARD_PATH": str(OUT / "cli.guard.json"), "PHASE1B_ALLOW_SQLITE_VEC": "1"}
-            if semantic_disabled
-            else {}
-        ),
-    },
+    env=env | {"BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "none"},
     capture_output=True,
     text=True,
     timeout=180,
 )
 (OUT / "provider-off.stdout").write_text(crash.stdout)
 (OUT / "provider-off.stderr").write_text(crash.stderr)
-if semantic_disabled:
-    assert crash.returncode == 0, crash.stderr
-else:
-    assert crash.returncode != 0 and "Unsupported semantic embedding provider" in crash.stderr
+assert crash.returncode != 0 and "Unsupported semantic embedding provider" in crash.stderr
 
 guards = {name: json.loads((OUT / f"{name}.guard.json").read_text()) for name in ("server-1", "server-2")}
-if semantic_disabled:
-    guards["cli"] = json.loads((OUT / "cli.guard.json").read_text())
 log_text = (state / "basic-memory.log").read_text()
-if not semantic_disabled:
-    assert "Semantic search disabled" in log_text and "Falling back to keyword-only search" in log_text, (
-        "the keyword-only fallback was not logged"
-    )
+assert "Semantic search disabled" in log_text and "Falling back to keyword-only search" in log_text, (
+    "the keyword-only fallback was not logged"
+)
 assert "failed_files=0" in log_text, "the watcher reported failed files"
-if semantic_disabled:
-    assert all(not guard["blocked_imports"] and not guard["blocked_connections"] for guard in guards.values()), guards
-    with sqlite3.connect(state / "memory.db") as connection:
-        assert not connection.execute("SELECT name FROM sqlite_master WHERE name='search_vector_embeddings'").fetchall()
-else:
-    assert "sqlite_vec" in guards["server-1"]["blocked_imports"], "the sqlite-vec control was not exercised"
+assert "sqlite_vec" in guards["server-1"]["blocked_imports"], "the sqlite-vec control was not exercised"
 assert not any(p.is_file() for p in (OUT / "models").rglob("*")), "the server downloaded embedding models"
 assert {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")} == before
 if installed:
@@ -307,15 +228,9 @@ if installed:
 summary = {
     "installed_package_used": installed,
     "basic_memory_version": version("basic-memory"),
-    "inference_unavailable": (
-        "fastembed, onnxruntime, torch, transformers and litellm imports plus outbound Python sockets blocked; sqlite_vec available"
-        if semantic_disabled
-        else "sqlite_vec, fastembed, onnxruntime, torch, transformers and litellm imports plus outbound Python sockets blocked in both MCP server processes"
-    ),
-    **({"installed_sqlite_vec_version": vector_runtime_version} if semantic_disabled else {}),
+    "inference_unavailable": "sqlite_vec, fastembed, onnxruntime, torch, transformers and litellm imports plus outbound Python sockets blocked in both MCP server processes",
     "mcp_server_boot_and_tools": True,
-    "semantic_disabled_fallback_logged": not semantic_disabled,
-    "semantic_disabled_by_configuration": semantic_disabled,
+    "semantic_disabled_fallback_logged": True,
     "explicit_vector_mode_refused": True,
     "default_search_mode_without_env_override": "text",
     "mcp_write_and_default_search": True,
@@ -329,12 +244,9 @@ summary = {
         guard["blocked_imports"].count("fastembed") for guard in guards.values()
     ),
     "provider_off_configuration_exit": crash.returncode,
-    "provider_off_configuration_error": None if semantic_disabled else "Unsupported semantic embedding provider",
+    "provider_off_configuration_error": "Unsupported semantic embedding provider",
     "live_corpus_unchanged": True,
-    "limits": ("Installed package" if installed else "Isolated patched package")
-    + " with semantic_search_enabled=false; disposable data, productive storage unchanged. SQLite MCP/watcher/restart verified, no live PostgreSQL or remote service verification."
-    if semantic_disabled
-    else (
+    "limits": (
         "One MCP stdio client per server process with a 30 s dwell, not real model traffic. "
         "The keyword-only fallback was simulated by blocking the sqlite_vec import; a deployment "
         "keeps it by not providing sqlite-vec. No protected execution boundary, no proposal/handover "

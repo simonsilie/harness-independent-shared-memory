@@ -126,7 +126,6 @@ def store(tmp_path: Path) -> Path:
         "database_backend": "sqlite",
         "database_url": None,
         "default_search_type": "text",
-        "semantic_search_enabled": False,
         "auto_update": False,
         "logfire_enabled": False,
     }

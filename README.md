@@ -1,18 +1,39 @@
 # Harness-independent shared memory
 
-Share project notes, personal preferences and work handovers between Codex,
-OpenCode and Claude Code. All three connect to the same local
-[Basic Memory](https://github.com/basicmachines-co/basic-memory) store over MCP,
-so a session can pick up where another left off. Other coding agents can connect
-to the same store if they support local MCP servers over stdio. Notes are
-Markdown, and SQLite indexes them for text search. The repository includes the
-runtime build, backup and restore commands, and portable export.
+Keep project decisions, personal preferences and work handovers available when
+you switch between Codex, OpenCode and Claude Code. This setup is for one
+developer working across sessions and repositories on the same machine. You can
+leave a handover with the next step in Codex and pick it up in OpenCode. Other
+coding agents can connect if they support local MCP servers over stdio.
 
-We patch Basic Memory so that [storage and text search work without an AI model
-or external AI service](docs/adr/0007-model-independent-storage-and-text-search.md).
-A second patch lets agents discover existing projects over MCP while reserving
-[project creation](patches/README.md#mcp-project-creation) for the operator by
-default.
+## What this adds to Basic Memory
+
+Basic Memory already provides local Markdown notes, SQLite full-text search
+and access from multiple MCP clients. Its hybrid search combines keyword
+matches with embeddings generated locally by FastEmbed.
+[Basic Memory overview](https://docs.basicmemory.com/start-here/what-is-basic-memory)
+
+- **Project-scoped recall and handovers.** Shared client instructions keep
+  personal preferences and project decisions separate from unfinished work.
+  Agents search `personal` and the current project and manage the seven-day
+  inactivity window and archive for handovers. Topic queries use hybrid search
+  and exact lookups use text search.
+  [Client instructions](docs/client-connections.md#tool-surface-and-instructions) ·
+  [Handover lifecycle](docs/shared-memory-lifecycle.md)
+- **Optional terminal approval.** The MCP gate sends durable writes to the owner
+  for review and confirmation, while eligible temporary handovers can be saved
+  directly. The gate guards its MCP write path. Its protection depends on the
+  client's shell and filesystem permissions.
+  [Approval policy](docs/adr/0013-technical-approval-for-durable-writes.md)
+- **Store snapshots and portable export.** `memory-ops` validates snapshots of
+  the notes, SQLite database and store configuration for same-version recovery.
+  It also runs Basic Memory's OKF export for every configured project. The
+  exported Markdown and YAML can be read independently.
+  [Backup and restore](docs/productive-backup.md) ·
+  [Portable export](docs/portable-export.md)
+
+Use Basic Memory directly if you need its broader MCP tool set.
+[Basic Memory MCP tools](https://docs.basicmemory.com/reference/mcp-tools-reference)
 
 ## Quick start
 
@@ -37,14 +58,12 @@ project. The script stops if the store already exists.
 ./init-store.sh
 ```
 
+For an existing store, [build embeddings for existing notes](docs/client-connections.md#build-embeddings-for-an-existing-store).
+
 ### Connect your coding agent
 
-The [approval gate](docs/adr/0013-technical-approval-for-durable-writes.md) is
-optional. It guards against unintended durable writes through MCP by requiring
-the owner to review and confirm each proposal in a terminal. A direct Basic
-Memory connection keeps approval in chat for a simpler workflow.
-
-To set up the gate, copy the configuration template from the repository root.
+Both connection modes use the same configuration. Copy the template from the
+repository root if you have no local configuration yet.
 
 ```sh
 cp shared_memory/approval_gate/config.example.json shared_memory/approval_gate/config.json
@@ -56,8 +75,14 @@ and store. The proxy and the owner CLI share this configuration, including
 `uv sync --locked` during setup.
 
 The [patched runtime](patches/README.md#mcp-project-creation) keeps `bm_project`
-available for `list` and `recent` while blocking project creation by default.
-Use `basic-memory project add` to add projects manually.
+available for discovery and reserves project creation for the operator by
+default. Add a project to this store with its notes directory under `~/SharedMemory`.
+
+```sh
+BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state" BASIC_MEMORY_FORCE_LOCAL=true \
+  uv run --locked --no-sync basic-memory project add my-project \
+  "$HOME/SharedMemory/notes/projects/my-project"
+```
 
 #### Generate Codex and OpenCode snippets
 
@@ -122,10 +147,19 @@ Start fresh sessions and check that each configured client lists `personal` and
 `example` with `bm_project`. With the gate enabled, ask one client to propose a
 short durable test note in `example`. Run the command returned with the proposal
 in your own terminal, review the note and confirm it there. Then ask another
-client to find it. For daily use, give clients the same instructions for
-project-scoped recall, presenting durable-write proposals, checksum-protected
-updates and temporary handovers.
+client to find it. For daily use, give each client the
+[same recall and write instructions](docs/client-connections.md#tool-surface-and-instructions)
+and the [handover lifecycle rules](docs/shared-memory-lifecycle.md).
 
 To connect directly, replace `shared-memory-approval-gate` with
 `shared-memory-mcp` in the client command and keep the same client tool
-permissions. See [how to select the launcher](docs/client-connections.md#launchers).
+permissions. In this mode, confirm durable writes in chat.
+See [how to select the launcher](docs/client-connections.md#launchers).
+
+## Architecture and evaluation
+
+The repository includes a separate read-only corpus and runners for Codex,
+OpenCode and Claude Code. They verify which memory tools each client used, which
+notes it retrieved and read, and whether the corpus was left intact.
+[Repository architecture](docs/repository-architecture.md) ·
+[Recorded recall results](docs/archive/evaluation-results.md)

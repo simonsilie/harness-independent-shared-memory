@@ -10,7 +10,7 @@ to historical plans and evidence.
 shared_memory/
   ops/                       native backup, restore and portable export
   approval_gate/             stdio MCP proxy and owner approval CLI
-  runtime_build.py           pinned model-free runtime build and verification
+  runtime_build.py           pinned Basic Memory wheel build and verification
 evaluation/
   bm                         experiment-only Basic Memory launcher
   corpus/                    reviewed experiment notes
@@ -40,7 +40,7 @@ Run commands from the repository root with uv. For scoring, set
 uv run --locked python -m evaluation.recall.score "$RUN_DIRECTORY/results.json"
 uv run --locked python -m evaluation.opencode.run --verify-only
 uv run --locked memory-ops --help
-WATCHFILES_FORCE_POLLING=true uv run --locked python evaluation/native/mcp_watcher.py --semantic-disabled
+WATCHFILES_FORCE_POLLING=true uv run --locked python evaluation/native/mcp_watcher.py
 uv run --locked pytest -m "not integration"
 uv run --locked pytest -m integration
 ```
@@ -84,6 +84,8 @@ Keep raw-evidence verification separate from scoring.
 The [quickstart](../README.md#connect-your-coding-agent) shows how to enable the
 optional `shared-memory-approval-gate` (`shared_memory.approval_gate.proxy`), which starts the
 native Basic Memory server. `shared-memory-mcp` starts that server directly.
+Both launchers use Basic Memory's local embeddings and hybrid search for topic
+recall. See [ADR 0014](adr/0014-native-local-embeddings.md).
 The proxy forwards reads and eligible temporary writes. For a durable write it
 returns a proposal that the owner reviews and confirms with `shared_memory.approval_gate.cli`.
 Direct connections use chat approval. See
@@ -96,11 +98,10 @@ wheel and invokes `evaluation/native/mcp_watcher.py` to verify it.
 
 `evaluation/native/mcp_server_guard.py` blocks inference imports and outbound
 Python sockets in disposable child processes. The MCP/watcher probe checks
-startup, writes, default/scoped text search, semantic-query refusal, external-file
-indexing, idle operation, restart and CLI retrieval. Its integration test runs
-the isolated semantic-disable path without installing packages. The two retained
-Semantic tests cover patch application from pristine and already-patched sources
-and byte-reproducible wheel construction.
+startup, writes, scoped text fallback, semantic-query refusal, external-file
+indexing, idle operation and restart with the vector runtime unavailable. Tests
+cover the opt-in for MCP project creation and reproducible construction of the
+patched wheel.
 
 The native conditional-write and coverage probes use that guard without any
 `workflow` import. Actual-client behavior and temporary context remain under

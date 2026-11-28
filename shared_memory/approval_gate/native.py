@@ -16,10 +16,12 @@ from . import ProposalError
 from .basic_memory_api import resolve_path_within_root
 from .config import Config
 
-# ADR 0007: these override inherited and configured values for every native MCP start.
-MODEL_FREE_ENV = {
+# ADR 0014: these override legacy text-only settings in existing stores.
+NATIVE_ENV = {
     "BASIC_MEMORY_FORCE_LOCAL": "true",
-    "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
+    "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
+    "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "hybrid",
+    "BASIC_MEMORY_RERANKER_ENABLED": "false",
     "BASIC_MEMORY_AUTO_UPDATE": "false",
     "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
     "WATCHFILES_FORCE_POLLING": "true",
@@ -106,7 +108,8 @@ def structured_data(result: dict[str, Any], name: str) -> dict[str, Any]:
 
 def native_environment(config: Config) -> dict[str, str]:
     inherited = {key: os.environ[key] for key in INHERITED_ENV if key in os.environ}
-    return inherited | (config.env or {}) | MODEL_FREE_ENV
+    configured = {key: value for key, value in (config.env or {}).items() if key.upper() not in NATIVE_ENV}
+    return inherited | configured | NATIVE_ENV
 
 
 async def start_native(config: Config) -> asyncio.subprocess.Process:

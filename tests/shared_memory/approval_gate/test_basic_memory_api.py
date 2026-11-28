@@ -30,11 +30,12 @@ PROJECT_ID = "0a8e7f0e-6b2c-4d0f-9b1a-3c2d1e0f9a8b"
 
 def test_pinned_basic_memory_version() -> None:
     # Bump together with pyproject.toml after rerunning this module against the new release.
-    assert version("basic-memory") == "1.0.0+semantic.2"
+    assert version("basic-memory") == "1.0.0+project.2"
 
 
-def test_config_exposes_the_semantic_disable_patch() -> None:
-    assert "semantic_search_enabled" in BasicMemoryConfig.model_fields
+def test_config_exposes_only_the_mcp_project_creation_patch() -> None:
+    assert "enable_mcp_project_create" in BasicMemoryConfig.model_fields
+    assert "semantic_search_enabled" not in BasicMemoryConfig.model_fields
 
 
 def test_frontmatter_parsing() -> None:

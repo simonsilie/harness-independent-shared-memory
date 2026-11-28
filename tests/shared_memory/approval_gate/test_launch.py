@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from shared_memory.approval_gate import launch
-from shared_memory.approval_gate.native import MODEL_FREE_ENV
+from shared_memory.approval_gate.native import NATIVE_ENV
 
 
 def write_config(tmp_path: Path, env: dict[str, str]) -> Path:
@@ -34,7 +34,7 @@ def keep_umask(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return masks
 
 
-def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, keep_umask):
+def test_mcp_launch_enables_local_embeddings_for_legacy_settings(tmp_path, state, monkeypatch, keep_umask):
     inherited = {
         "HOME": "/example/home",
         "PATH": "/example/bin",
@@ -45,7 +45,13 @@ def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, kee
     }
     monkeypatch.setattr(launch.os, "environ", inherited | {"UNRELATED_CLIENT_SETTING": "synthetic-value"})
     path = write_config(
-        tmp_path, {"BASIC_MEMORY_CONFIG_DIR": str(state), "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "true"}
+        tmp_path,
+        {
+            "BASIC_MEMORY_CONFIG_DIR": str(state),
+            "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "openai",
+            "basic_memory_semantic_embedding_provider": "openai",
+            "BASIC_MEMORY_DEFAULT_SEARCH_TYPE": "text",
+        },
     )
     calls = []
     monkeypatch.setattr(launch.os, "execvpe", lambda *call: calls.append(call))
@@ -55,7 +61,9 @@ def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, kee
     ((executable, command, env),) = calls
     assert executable == "/example/bin/basic-memory"
     assert command == ["/example/bin/basic-memory", "mcp"]
-    assert env == inherited | {"BASIC_MEMORY_CONFIG_DIR": str(state)} | MODEL_FREE_ENV
+    assert env == inherited | {"BASIC_MEMORY_CONFIG_DIR": str(state)} | NATIVE_ENV
+    assert env["BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER"] == "fastembed"
+    assert env["BASIC_MEMORY_DEFAULT_SEARCH_TYPE"] == "hybrid"
     assert keep_umask == [0o077]
 
 
@@ -77,7 +85,7 @@ def test_launch_refuses_an_unpatched_runtime(tmp_path, state, monkeypatch, capsy
     with pytest.raises(SystemExit):
         launch.gate_main(["--config", str(path)])
 
-    assert "semantic-disable patch" in capsys.readouterr().err
+    assert "patched runtime for MCP project creation" in capsys.readouterr().err
 
 
 def test_gate_launch_passes_configured_store_to_the_proxy(tmp_path, state, monkeypatch):

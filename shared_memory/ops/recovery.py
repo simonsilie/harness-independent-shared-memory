@@ -157,8 +157,8 @@ def backup(source: Path, destination: Path) -> None:
     config_path = source / "state/config.json"
     config_bytes = config_path.read_bytes()
     config = json.loads(config_bytes)
-    if config["database_backend"] != "sqlite" or config.get("database_url") or config["semantic_search_enabled"]:
-        raise ValueError("Expected the productive model-free SQLite configuration")
+    if config["database_backend"] != "sqlite" or config.get("database_url"):
+        raise ValueError("Expected the local SQLite configuration")
     if destination.exists():
         raise FileExistsError(f"Backup destination exists: {destination}")
     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

@@ -22,9 +22,6 @@ def synthetic_wheel(tmp_path: Path) -> Path:
         subprocess.run(
             [*PATCH_ARGS, "-i", str(PROJECT_CREATE_PATCH), "--reverse"], cwd=stage, check=True, capture_output=True
         )
-    if "semantic_search_enabled" in (stage / "basic_memory/config_models.py").read_text():
-        legacy_patch = PROJECT_CREATE_PATCH.with_name("basic-memory-semantic-disable.patch")
-        subprocess.run([*PATCH_ARGS, "-i", str(legacy_patch), "--reverse"], cwd=stage, check=True, capture_output=True)
     info = stage / "basic_memory-1.0.0.dist-info"
     info.mkdir()
     (info / "METADATA").write_text("Metadata-Version: 2.4\nName: basic-memory\nVersion: 1.0.0\n")
@@ -55,11 +52,9 @@ def test_build_is_reproducible_and_applies_patch(tmp_path: Path) -> None:
         assert f"{info}/RECORD" in archive.namelist()
         project_tools = "basic_memory/mcp/tools/projects.py"
         config = "basic_memory/config_models.py"
-        changed = {
-            path
-            for path in source.namelist()
-            if path.startswith("basic_memory/") and (archive.read(path) != source.read(path))
-        }
+        package_files = {path for path in source.namelist() if path.startswith("basic_memory/")}
+        assert package_files == {path for path in archive.namelist() if path.startswith("basic_memory/")}
+        changed = {path for path in package_files if archive.read(path) != source.read(path)}
         assert changed == set(manifest["patched_files"]) == {config, project_tools}
         assert "enable_mcp_project_create" in archive.read(project_tools).decode()
         assert "semantic_search_enabled" not in archive.read(config).decode()

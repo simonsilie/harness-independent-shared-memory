@@ -20,16 +20,15 @@ atexit.register(record)
 
 class UnavailableInference(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        # The control simulates missing sqlite-vec to exercise keyword-only
-        # fallback. The installed-stack comparison leaves that extension intact;
-        # inference stays unavailable in both cases.
+        # Simulate missing sqlite-vec to exercise keyword-only fallback.
         if fullname.split(".")[0] in {
             "fastembed",
             "onnxruntime",
             "torch",
             "transformers",
             "litellm",
-        } or (fullname == "sqlite_vec" and os.environ.get("PHASE1B_ALLOW_SQLITE_VEC") != "1"):
+            "sqlite_vec",
+        }:
             events["blocked_imports"].append(fullname)
             record()
             raise ModuleNotFoundError(f"Inference unavailable in this probe: {fullname}", name=fullname)
