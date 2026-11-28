@@ -10,7 +10,7 @@ backend if one is needed later.
 The custom wheel blocked `bm_project(command="create")` by default. In upstream
 1.0.0, `list`, `recent` and `create` share the same tool. The approval gate
 enforces the rule for both launcher names.
-[Historical patch](../patches/README.md) · [Gate](../shared_memory/approval_gate/proxy.py#L163) ·
+[Historical patch](https://github.com/simonsilie/harness-independent-shared-memory/blob/2b17f84af820c4e1e9dbd1c819586c6c891138d8/patches/README.md) · [Gate](../shared_memory/approval_gate/proxy.py#L163) ·
 [Upstream project tool](https://github.com/basicmachines-co/basic-memory/blob/v1.0.0/src/basic_memory/mcp/tools/projects.py)
 
 - [x] **Use one approval path.** Route both launcher names through the terminal
@@ -25,9 +25,13 @@ enforces the rule for both launcher names.
   creation. The operator CLI created the project successfully. The integration
   suite verified reads, temporary writes, terminal approval, watcher indexing
   and text fallback against the official wheel.
-- [ ] **Roll out with owner approval.** Switch and verify all direct MCP entries,
-  including project-local overrides, before installing the official wheel.
-  Keep the previous launcher configuration and runtime for rollback.
+- [x] **Roll out with owner approval.** Verified the global and project-local
+  Codex and OpenCode entries and switched both Claude Code entries to the gate
+  before installing the official wheel. Fresh client checks confirmed the
+  connections. Disposable-store checks on both wheels confirmed that project
+  creation requires the operator CLI and durable writes require terminal
+  approval. The previous launcher configuration and runtime are available for
+  rollback.
   [Approval policy](adr/0013-technical-approval-for-durable-writes.md) ·
   [Migration procedure](client-connections.md#migrate-to-the-official-wheel)
 
