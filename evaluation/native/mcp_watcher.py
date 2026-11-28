@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import time
@@ -23,12 +22,7 @@ OUT = Path(__file__).resolve().parent / "runs" / datetime.now(timezone.utc).strf
 OUT.mkdir(parents=True)
 logger.info(f"Native MCP/watcher probe artifacts: {OUT}")
 installed_version = version("basic-memory")
-expected_version = os.environ.get("NATIVE_MCP_EXPECTED_VERSION")
-if expected_version is None:
-    assert installed_version.partition("+")[0] == "1.0.0"
-else:
-    assert installed_version == expected_version
-installed = "--installed" in sys.argv
+assert installed_version == "1.0.0"
 before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
 state = OUT / "state"
 corpus = OUT / "corpus"
@@ -50,8 +44,6 @@ corpus.mkdir()
 # search mode must fall back to text on its own when semantic search is unavailable.
 env = client_environment("BASIC_MEMORY_", "NATIVE_MCP_", "OPENAI_", "LOGFIRE_")
 env.pop("PYTEST_CURRENT_TEST", None)
-if installed:
-    env.pop("PYTHONPATH", None)
 env.update(
     {
         "BASIC_MEMORY_CONFIG_DIR": str(state),
@@ -221,13 +213,11 @@ assert "failed_files=0" in log_text, "the watcher reported failed files"
 assert "sqlite_vec" in guards["server-1"]["blocked_imports"], "the sqlite-vec control was not exercised"
 assert not any(p.is_file() for p in (OUT / "models").rglob("*")), "the server downloaded embedding models"
 assert {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")} == before
-if installed:
-    assert all(
-        Path(guard["basic_memory_source"]).resolve() == Path(basic_memory.__file__).resolve()
-        for guard in guards.values()
-    ), guards
+assert all(
+    Path(guard["basic_memory_source"]).resolve() == Path(basic_memory.__file__).resolve() for guard in guards.values()
+), guards
 summary = {
-    "installed_package_used": installed,
+    "same_package_used_by_both_servers": True,
     "basic_memory_version": version("basic-memory"),
     "inference_unavailable": "sqlite_vec, fastembed, onnxruntime, torch, transformers and litellm imports plus outbound Python sockets blocked in both MCP server processes",
     "mcp_server_boot_and_tools": True,

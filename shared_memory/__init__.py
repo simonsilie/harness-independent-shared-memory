@@ -1,1 +1,1 @@
-"""Shared-memory tooling: the approval gate, store operations and the patched runtime build."""
+"""Shared-memory approval gate and store operations."""

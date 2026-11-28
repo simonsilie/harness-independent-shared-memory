@@ -83,6 +83,91 @@ def proxy(store, tmp_path):
     return root, config, parameters
 
 
+@pytest.mark.parametrize("launcher", ["shared-memory-approval-gate", "shared-memory-mcp"])
+def test_launchers_reserve_project_creation_for_the_operator(proxy, launcher):
+    root, config, parameters = proxy
+    parameters = parameters.model_copy(
+        update={"command": str(Path(sys.executable).with_name(launcher)), "args": parameters.args[-2:]}
+    )
+    target = root / "notes/new-project"
+    state_config = root / "state/config.json"
+
+    async def check():
+        async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
+            await session.initialize()
+            listing = await session.call_tool("bm_project", {"command": "list", "output_format": "json"})
+            assert not listing.is_error
+            assert {project["name"] for project in listing.structured_content["result"]["projects"]} == {
+                "personal",
+                "alpha",
+            }
+            recent = await session.call_tool("bm_project", {"command": "recent", "project": "personal"})
+            assert not recent.is_error
+            creation = await session.call_tool(
+                "bm_project", {"command": "create", "name": "new-project", "path": str(target)}
+            )
+            assert creation.is_error
+            refusal = creation.content[0]
+            assert refusal.type == "text"
+            assert "only allows list and recent" in refusal.text
+
+    asyncio.run(check())
+    assert not target.exists()
+    assert set(json.loads(state_config.read_text())["projects"]) == {"personal", "alpha"}
+    subprocess.run(
+        [config.native_command[0], "project", "add", "new-project", str(target)],
+        env=get_default_environment() | (config.env or {}),
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
+    assert target.is_dir()
+    assert "new-project" in json.loads(state_config.read_text())["projects"]
+
+
+@pytest.mark.skipif(
+    "SHARED_MEMORY_TEST_FASTEMBED_CACHE" not in os.environ,
+    reason="Set SHARED_MEMORY_TEST_FASTEMBED_CACHE to a populated FastEmbed model cache.",
+)
+def test_default_hybrid_search_finds_a_paraphrase(proxy, tmp_path):
+    root, config, parameters = proxy
+    cache = Path(os.environ["SHARED_MEMORY_TEST_FASTEMBED_CACHE"]).resolve(strict=True)
+    state_config = root / "state/config.json"
+    settings = json.loads(state_config.read_text())
+    del settings["default_search_type"]
+    state_config.write_text(json.dumps(settings))
+    (root / "notes/personal/servicing.md").write_text(
+        "---\ntitle: Vehicle servicing\n---\n\nA car needs regular oil changes and tire rotation.\n"
+    )
+    environment = (config.env or {}) | {
+        "BASIC_MEMORY_SEMANTIC_EMBEDDING_CACHE_DIR": str(cache),
+        "BASIC_MEMORY_SEMANTIC_EMBEDDING_PROVIDER": "fastembed",
+        "BASIC_MEMORY_RERANKER_ENABLED": "false",
+    }
+    result = subprocess.run(
+        [config.native_command[0], "reindex", "--full", "--search", "--embeddings"],
+        env=get_default_environment() | environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    (tmp_path / "gate.json").write_text(config.model_copy(update={"env": environment}).model_dump_json())
+
+    async def check():
+        arguments = {"query": "automobile maintenance", "project": "personal", "output_format": "json"}
+        async with stdio_client(parameters) as streams, ClientSession(*streams, read_timeout_seconds=30) as session:
+            await session.initialize()
+            text = await session.call_tool("bm_search", arguments | {"mode": "text"})
+            assert not text.is_error, text.content
+            assert text.structured_content["result"]["results"] == []
+            hybrid = await session.call_tool("bm_search", arguments)
+            assert not hybrid.is_error, hybrid.content
+            assert hybrid.structured_content["result"]["results"][0]["file_path"] == "servicing.md"
+
+    asyncio.run(check())
+
+
 def test_durable_write_requires_owner_approval_and_then_persists(proxy):
     root, config, parameters = proxy
     target = root / "notes/personal/durable/decision.md"

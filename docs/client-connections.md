@@ -14,8 +14,8 @@ disposable stores with
 `uv run --locked --no-sync pytest -m integration tests/shared_memory/approval_gate`.
 
 Check the effective server entry, including any project-local override, to see
-which command a client will use. Switching productive clients between the gate
-and a direct connection requires explicit owner approval. After a switch,
+which command a client will use. Switching productive clients requires explicit
+owner approval. After a switch,
 restart each affected client and check that `bm_project` with `command="list"`
 returns the expected projects. To verify the gate, propose a synthetic durable
 note in a disposable project. Check that the client receives a proposal and the
@@ -25,16 +25,15 @@ note is absent while approval is pending.
 
 `uv sync --locked` installs two commands into the checkout's `.venv/bin`.
 `shared-memory-approval-gate` starts the gate in front of the native server and
-requires terminal approval for durable writes; the snippet generator uses it.
-`shared-memory-mcp` starts the native server directly, for chat approval. Both
-read `shared_memory/approval_gate/config.json`, or the file given with `--config` or
-`SHARED_MEMORY_APPROVAL_CONFIG`, and take no MCP arguments from the client.
-They set private file permissions and refuse to start when the store
-configuration is missing, the runtime lacks the MCP project-creation patch, or
-the old semantic-disable patch is present. They enforce local routing and
+requires terminal approval for durable writes. The snippet generator uses it.
+`shared-memory-mcp` is an alias for the same gate, so existing entries that
+reference this checkout also require terminal approval. The launcher reads
+`shared_memory/approval_gate/config.json` or the file given with `--config` or
+`SHARED_MEMORY_APPROVAL_CONFIG`. It sets private file permissions and requires
+an existing store configuration. It enforces local routing and
 FastEmbed, leaving search mode to Basic Memory. With no configured default,
 Basic Memory uses hybrid search when the vector runtime is available and text
-search otherwise. The launchers disable reranking, automatic updates and
+search otherwise. The launcher disables reranking, automatic updates and
 Logfire and use polling-based file watching.
 
 The native process inherits only `HOME`, `PATH`, `TMPDIR`, `LANG`, `LC_ALL`
@@ -42,10 +41,22 @@ and `LC_CTYPE` from the launcher or owner CLI. Set any additional settings the
 native process needs, such as `BASIC_MEMORY_CONFIG_DIR`, in the gate
 configuration's `env` object. Do not put model credentials there.
 
-With explicit owner approval, select the command in each client's
-`basic_memory` server entry. Preserve the client tool permissions, restart each
-affected client and verify it as described above. To restore the previous
-mode, select the other command again and restart the client.
+### Migrate to the official wheel
+
+1. Keep the previous checkout revision, patched runtime and client entries
+   available for rollback. With explicit owner approval, switch all direct MCP
+   entries to `shared-memory-approval-gate` while still on the previous revision
+   and patched runtime. Include project-local overrides and entries that use the
+   old `shared-memory-mcp` launcher. Preserve the client tool permissions.
+2. Restart each affected client and check its effective launcher and project
+   listing. In a disposable store, verify that `bm_project` refuses project
+   creation and a durable write returns an approval proposal without saving
+   the note.
+3. After those checks pass, update the checkout and install the official wheel
+   with `uv sync --locked`. Restart the clients and repeat the checks.
+
+For rollback, restore the previous checkout revision and patched runtime before
+restoring any direct MCP entries, then restart the affected clients.
 
 ## Build embeddings for an existing store
 
@@ -90,8 +101,8 @@ OpenCode expands `{env:HOME}` in the checked-in launcher command using its
 Codex receives the resolved absolute launcher path. Its server is optional
 (`required=false`) so memory startup failure does not block other work; tool
 approval mode remains `approve`, preserving the existing client behavior.
-Direct connections apply the chat convention described below. Connections through
-the gate require terminal approval for durable writes.
+Configure those entries to use the gate, which requires terminal approval for
+durable writes.
 
 Existing dotfiles edits were preserved. `bin/link-dotfiles opencode codex`
 confirmed the existing links. Previous client configurations and dotfiles source
