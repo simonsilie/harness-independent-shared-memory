@@ -30,11 +30,11 @@ three stable commands of the [``ops`` package](../shared_memory/ops). The
 [implementation](../shared_memory/ops/recovery.py) uses SQLite's online
 backup API, including committed WAL data, rather than copying a live database
 file. It copies all configured local project trees, empty directories, the
-ignore rules, configuration and observation log. The observation log is read
-under a shared lock compatible with the writers' exclusive locks. Its snapshot
-is independent of the database transaction; observations do not participate in
-native note transactions. Runtime logs, watcher status and SQLite sidecars are
-excluded.
+ignore rules, configuration, observation log and the approval gate's state. The
+observation log is read under a shared lock compatible with the writers'
+exclusive locks. Its snapshot is independent of the database transaction;
+observations do not participate in native note transactions. Runtime logs,
+watcher status and SQLite sidecars are excluded.
 
 In a private directory next to the destination, it verifies database integrity, foreign keys,
 project associations, the complete Markdown file set and every file's bytes
@@ -50,6 +50,30 @@ and effective configuration are relative to the snapshot root; the original
 configuration is retained separately as `state/config.original.json`. All native
 tables, identities, history and lifecycle frontmatter are retained. The snapshot
 is for same-version recovery. Use OKF for portable export across implementations.
+
+## Approval state
+
+Set `proposals_dir` to `<store-root>/approvals` and `audit_log` to
+`<store-root>/approval-audit.jsonl`, as in the configuration template. Backup
+uses these exact paths. It takes the gate's proposal and audit locks when
+present and validates the JSON records before publication. If the gate creates
+its proposal lock while backup is copying approval state, backup aborts so the
+operator can retry. The manifest covers the approval files like every other
+payload file.
+
+Restore retains the audit log unchanged as evidence. It closes each `pending`
+proposal as `closed_by_recovery` and records `closed_from_status` and
+`closed_at`. The approval CLI accepts only `pending`, so a recovered proposal
+cannot be approved. Proposals in `applying` or `outcome_unknown` keep that status
+and also cannot be approved; check the restored store before submitting the write
+again. Approved, rejected, refused and closed proposals remain as history. If a
+write is still wanted after recovery, submit a new proposal.
+
+The gate configuration is outside the snapshot. After activation, point it at
+the restored paths: `BASIC_MEMORY_CONFIG_DIR` to `<destination>/state`,
+`proposals_dir` to `<destination>/approvals`, and `audit_log` to
+`<destination>/approval-audit.jsonl`. The decision is recorded in
+[ADR 0015](adr/0015-recovery-retains-approval-evidence.md).
 
 Restore only into a new, separate destination:
 
@@ -103,7 +127,10 @@ verification. Keep snapshot identifiers and detailed results with the backup.
 [Isolated integration tests](../tests/shared_memory/ops/test_recovery_integration.py)
 cover active and archived fixtures, WAL-only committed data and two successive
 restores. They also reject unindexed Markdown, corrupted payloads and existing
-restore destinations.
+restore destinations. The approval-state cases retain the audit log and terminal
+proposals, close a pending proposal as `closed_by_recovery`, and confirm that
+neither it nor an `outcome_unknown` proposal reaches confirmation after recovery.
+Resubmitting the same write creates a new proposal instead of reusing either one.
 
 The first drill exposed two constraints, with its artifacts retained alongside
 the final run: full native indexing updates technical timestamps, and a WAL-mode

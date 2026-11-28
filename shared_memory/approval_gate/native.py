@@ -111,13 +111,16 @@ def native_environment(config: Config) -> dict[str, str]:
     return inherited | configured | NATIVE_ENV
 
 
-async def start_native(config: Config) -> asyncio.subprocess.Process:
+async def start_native(config: Config, *, offline_embeddings: bool = False) -> asyncio.subprocess.Process:
+    env = native_environment(config)
+    if offline_embeddings:
+        env["HF_HUB_OFFLINE"] = "1"
     return await asyncio.create_subprocess_exec(
         *config.native_command,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         limit=MESSAGE_LIMIT,
-        env=native_environment(config),
+        env=env,
     )
 
 
@@ -214,7 +217,8 @@ async def shutdown_native(process: asyncio.subprocess.Process) -> None:
 
 async def _native_write(config: Config, arguments: dict[str, Any]) -> None:
     try:
-        process = await start_native(config)
+        # The similar-note lookup can download a model after the note is already written.
+        process = await start_native(config, offline_embeddings=True)
     except OSError as error:
         raise NativePreflightError(f"Could not start native MCP server: {error}") from error
     client = NativeClient(process)

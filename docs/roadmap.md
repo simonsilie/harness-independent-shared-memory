@@ -33,14 +33,15 @@ enforces the rule for both launcher names.
 
 ## Recovery and export backlog
 
-- [ ] **Define recovery for the approval gate.** A successful restore brings back
-  notes and the observation log, while proposal files and the approval audit log
-  are absent from the restored snapshot. Decide how the audit trail is retained
-  and how pending or unresolved proposals are handled after recovery. Verify the
-  policy in an isolated restore, including that a proposal with an uncertain
-  outcome cannot be replayed automatically.
-  [Backup inputs](../shared_memory/ops/recovery.py#L177) ·
-  [Approval state paths](../shared_memory/approval_gate/config.example.json#L8)
+- [x] **Define recovery for the approval gate.** Snapshots include
+  `approval-audit.jsonl` and `approvals/` from the store root. Restore retains
+  the audit trail, closes pending proposals as `closed_by_recovery`, and leaves `applying` and
+  `outcome_unknown` unapprovable, so no proposal can be replayed automatically.
+  The isolated recovery test verifies the retained evidence and the refusal of
+  both a closed and an uncertain proposal.
+  [Recovery decision](adr/0015-recovery-retains-approval-evidence.md) ·
+  [Backup procedure](productive-backup.md#approval-state) ·
+  [Recovery tests](../tests/shared_memory/ops/test_recovery_integration.py)
 - [ ] **Publish the complete OKF export together.** A failure in the second
   project left the first bundle under the final path and blocked a retry to the
   same destination. Stage all bundles beside the destination and publish only

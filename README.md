@@ -66,7 +66,9 @@ cp shared_memory/approval_gate/config.example.json shared_memory/approval_gate/c
 
 Replace the placeholder paths in that file with absolute paths to your checkout
 and store. The proxy and the owner CLI share this configuration, including
-`BASIC_MEMORY_CONFIG_DIR`. The launcher uses the environment created by
+`BASIC_MEMORY_CONFIG_DIR`. Set `proposals_dir` to `<store-root>/approvals` and
+`audit_log` to `<store-root>/approval-audit.jsonl` so `memory-ops backup` includes
+them in snapshots. The launcher uses the environment created by
 `uv sync --locked` during setup.
 
 The gate keeps `bm_project` available for discovery and recent activity.

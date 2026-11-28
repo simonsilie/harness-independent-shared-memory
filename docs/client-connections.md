@@ -69,6 +69,8 @@ so the native text fallback still works.
 
 Build the missing vectors from the checkout root. FastEmbed can download the
 model on first use and caches it under the store's state directory by default.
+The owner approval process uses local model files only, so a cold cache cannot
+start a download while the CLI waits for the write reply.
 
 ```sh
 BASIC_MEMORY_CONFIG_DIR="$HOME/SharedMemory/state" \
