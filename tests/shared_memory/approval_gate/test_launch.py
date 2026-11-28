@@ -35,6 +35,15 @@ def keep_umask(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 
 
 def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, keep_umask):
+    inherited = {
+        "HOME": "/example/home",
+        "PATH": "/example/bin",
+        "TMPDIR": "/example/tmp",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "LC_CTYPE": "C",
+    }
+    monkeypatch.setattr(launch.os, "environ", inherited | {"UNRELATED_CLIENT_SETTING": "synthetic-value"})
     path = write_config(
         tmp_path, {"BASIC_MEMORY_CONFIG_DIR": str(state), "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "true"}
     )
@@ -46,8 +55,7 @@ def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, kee
     ((executable, command, env),) = calls
     assert executable == "/example/bin/basic-memory"
     assert command == ["/example/bin/basic-memory", "mcp"]
-    assert env["BASIC_MEMORY_CONFIG_DIR"] == str(state)
-    assert {key: env[key] for key in MODEL_FREE_ENV} == MODEL_FREE_ENV
+    assert env == inherited | {"BASIC_MEMORY_CONFIG_DIR": str(state)} | MODEL_FREE_ENV
     assert keep_umask == [0o077]
 
 
