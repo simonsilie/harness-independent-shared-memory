@@ -27,8 +27,8 @@ BASE_WHEEL_URL = (
     "basic_memory-1.0.0-py3-none-any.whl"
 )
 BASE_WHEEL_SHA256 = "a2d2c1589616c9599aec9edd6597d508028c5af88632312fc0990dcaccf02867"
-BUILD_REVISION = "project.1"
-PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "-p1"]
+BUILD_REVISION = "project.2"
+PATCH_ARGS = ["patch", "--batch", "--force", "--fuzz=0", "--no-backup-if-mismatch", "-p1"]
 WHEEL_SUFFIX = "-py3-none-any.whl"
 
 
