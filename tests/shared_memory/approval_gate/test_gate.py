@@ -79,6 +79,9 @@ from pathlib import Path
 
 log = open(sys.argv[1], "a")
 mode = os.getenv("APPROVAL_GATE_FAKE_MODE")
+if mode == "approval_env":
+    keys = ("BASIC_MEMORY_AUTO_UPDATE", "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED", "BASIC_MEMORY_FORCE_LOCAL")
+    log.write(json.dumps({"env": {key: os.getenv(key) for key in keys}}) + "\n")
 if mode == "proxy_shutdown":
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 target = None
@@ -715,9 +718,18 @@ def test_integration_approval_reports_a_failed_final_save(tmp_path, native):
     assert events[-1] == "proposal_applying"
 
 
-def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path, native):
+def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path, native, monkeypatch):
     native_command, log = native
-    config = make_config(tmp_path, native_command)
+    monkeypatch.setenv("BASIC_MEMORY_AUTO_UPDATE", "true")
+    config = make_config(tmp_path, native_command).model_copy(
+        update={
+            "env": {
+                "APPROVAL_GATE_FAKE_MODE": "approval_env",
+                "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "true",
+                "BASIC_MEMORY_FORCE_LOCAL": "false",
+            }
+        }
+    )
     arguments = {
         "content": DURABLE,
         "project": "personal",
@@ -731,6 +743,11 @@ def test_integration_owner_cli_approves_exact_arguments_through_native(tmp_path,
     stored = load_proposal(config, proposal["id"])
     assert stored["status"] == "approved" and stored["approved_at"]
     calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert calls[0]["env"] == {
+        "BASIC_MEMORY_AUTO_UPDATE": "false",
+        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
+        "BASIC_MEMORY_FORCE_LOCAL": "true",
+    }
     written = [entry["arguments"] for entry in calls if "call" in entry and entry["call"] == "bm_write"]
     assert written == [
         arguments | {"project": PROJECT_ID, "identifier": "decisions/decision.md", "output_format": "json"}
