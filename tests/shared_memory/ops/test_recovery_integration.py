@@ -11,7 +11,12 @@ from shared_memory.ops import backup, inventory, recovery, restore
 
 
 @pytest.fixture
-def store(tmp_path):
+def note_suffix():
+    return ".md"
+
+
+@pytest.fixture
+def store(tmp_path, note_suffix):
     source = tmp_path / "live"
     (source / "state").mkdir(parents=True)
     (source / "notes/personal").mkdir(parents=True)
@@ -33,15 +38,17 @@ def store(tmp_path):
         )
         for status in ["active", "archived"]:
             body = f"---\nkind: temporary\nstatus: {status}\n---\nPending recovery work\n"
-            (source / f"notes/personal/{status}.md").write_text(body)
+            filename = f"{status}{note_suffix}"
+            (source / "notes/personal" / filename).write_text(body)
             connection.execute(
                 "INSERT INTO note_content VALUES (1, ?, ?, ?)",
-                (f"{status}.md", body, hashlib.sha256(body.encode()).hexdigest()),
+                (filename, body, hashlib.sha256(body.encode()).hexdigest()),
             )
     return source
 
 
-def test_round_trip_preserves_content_and_live_store(store, tmp_path):
+@pytest.mark.parametrize("note_suffix", [".md", ".markdown", ".MARKDOWN"])
+def test_round_trip_preserves_content_and_live_store(store, tmp_path, note_suffix):
     before = inventory(store)
     archive, target = tmp_path / "backup", tmp_path / "restored"
 
@@ -50,8 +57,8 @@ def test_round_trip_preserves_content_and_live_store(store, tmp_path):
 
     assert inventory(store) == before
     for relative in [
-        "notes/personal/active.md",
-        "notes/personal/archived.md",
+        f"notes/personal/active{note_suffix}",
+        f"notes/personal/archived{note_suffix}",
         "observations/observations.jsonl",
         "state/.bmignore",
     ]:
@@ -61,8 +68,9 @@ def test_round_trip_preserves_content_and_live_store(store, tmp_path):
         assert connection.execute("SELECT count(*) FROM note_content").fetchone()[0] == 2
 
 
-def test_backup_refuses_unindexed_file(store, tmp_path):
-    (store / "notes/personal/missing.md").write_text("Unsaved knowledge")
+@pytest.mark.parametrize("missing_suffix", [".md", ".markdown"])
+def test_backup_refuses_unindexed_file(store, tmp_path, missing_suffix):
+    (store / f"notes/personal/missing{missing_suffix}").write_text("Unsaved knowledge")
 
     with pytest.raises(ValueError, match="Unindexed"):
         backup(store, tmp_path / "backup")
