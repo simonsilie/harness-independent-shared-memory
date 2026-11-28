@@ -29,8 +29,9 @@ if expected_version is None:
     assert installed_version.partition("+")[0] == "1.0.0"
 else:
     assert installed_version == expected_version
-installed = "--installed-semantic-disabled" in sys.argv
-semantic_disabled = installed or "--semantic-disabled" in sys.argv
+installed_semantic_disabled = "--installed-semantic-disabled" in sys.argv
+installed = installed_semantic_disabled or "--installed" in sys.argv
+semantic_disabled = installed_semantic_disabled or "--semantic-disabled" in sys.argv
 before = {str(p.relative_to(ROOT)): sha256_file(p) for p in (ROOT / "evaluation/corpus").rglob("*.md")}
 state = OUT / "state"
 corpus = OUT / "corpus"
