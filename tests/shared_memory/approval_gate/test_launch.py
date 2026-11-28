@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from shared_memory.approval_gate import launch
+from shared_memory.approval_gate.native import MODEL_FREE_ENV
 
 
 def write_config(tmp_path: Path, env: dict[str, str]) -> Path:
@@ -46,7 +47,7 @@ def test_mcp_launch_forces_model_free_settings(tmp_path, state, monkeypatch, kee
     assert executable == "/example/bin/basic-memory"
     assert command == ["/example/bin/basic-memory", "mcp"]
     assert env["BASIC_MEMORY_CONFIG_DIR"] == str(state)
-    assert {key: env[key] for key in launch.MODEL_FREE_ENV} == launch.MODEL_FREE_ENV
+    assert {key: env[key] for key in MODEL_FREE_ENV} == MODEL_FREE_ENV
     assert keep_umask == [0o077]
 
 
@@ -71,7 +72,7 @@ def test_launch_refuses_an_unpatched_runtime(tmp_path, state, monkeypatch, capsy
     assert "semantic-disable patch" in capsys.readouterr().err
 
 
-def test_gate_launch_passes_model_free_settings_to_the_proxy(tmp_path, state, monkeypatch):
+def test_gate_launch_passes_configured_store_to_the_proxy(tmp_path, state, monkeypatch):
     path = write_config(tmp_path, {"BASIC_MEMORY_CONFIG_DIR": str(state)})
     calls = []
     monkeypatch.setattr(launch, "run_proxy", lambda config, config_path: calls.append((config, config_path)) or 0)
@@ -80,4 +81,4 @@ def test_gate_launch_passes_model_free_settings_to_the_proxy(tmp_path, state, mo
 
     ((config, config_path),) = calls
     assert config_path == path
-    assert config.env == {"BASIC_MEMORY_CONFIG_DIR": str(state)} | launch.MODEL_FREE_ENV
+    assert config.env == {"BASIC_MEMORY_CONFIG_DIR": str(state)}

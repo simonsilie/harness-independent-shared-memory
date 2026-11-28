@@ -16,6 +16,15 @@ from . import ProposalError
 from .basic_memory_api import resolve_path_within_root
 from .config import Config
 
+# ADR 0007: these override inherited and configured values for every native MCP start.
+MODEL_FREE_ENV = {
+    "BASIC_MEMORY_FORCE_LOCAL": "true",
+    "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
+    "BASIC_MEMORY_AUTO_UPDATE": "false",
+    "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
+    "WATCHFILES_FORCE_POLLING": "true",
+}
+
 REQUEST_TIMEOUT = 20
 SHUTDOWN_TIMEOUT = 10
 MESSAGE_LIMIT = 16 * 1024 * 1024
@@ -93,13 +102,17 @@ def structured_data(result: dict[str, Any], name: str) -> dict[str, Any]:
     return data
 
 
+def native_environment(config: Config) -> dict[str, str]:
+    return dict(os.environ) | (config.env or {}) | MODEL_FREE_ENV
+
+
 async def start_native(config: Config) -> asyncio.subprocess.Process:
     return await asyncio.create_subprocess_exec(
         *config.native_command,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         limit=MESSAGE_LIMIT,
-        env=os.environ | (config.env or {}),
+        env=native_environment(config),
     )
 
 
