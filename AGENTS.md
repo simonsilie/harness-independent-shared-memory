@@ -66,8 +66,9 @@ others.
 - Use `--force` for directional patch checks, including reverse dry runs, and
   test both pristine and already-patched sources. This keeps `patch --batch`
   from automatically retrying in the opposite direction and misidentifying
-  pristine source as already patched (see `patches/README.md` and
-  `tests/evaluation/native/test_semantic_runtime_build.py`).
+  pristine source as already patched (see the historical
+  [patch notes](https://github.com/simonsilie/harness-independent-shared-memory/blob/4fae58dfca94af60a602c7a69b24a7590d5b7d4c/patches/README.md) and
+  [build tests](https://github.com/simonsilie/harness-independent-shared-memory/blob/4fae58dfca94af60a602c7a69b24a7590d5b7d4c/tests/evaluation/native/test_semantic_runtime_build.py)).
 - For standalone SQLite backups, close database connections and convert the
   copied snapshot to `journal_mode=DELETE` before computing its manifest.
   Verify that repeated reads and restores leave the backup unchanged: WAL/SHM

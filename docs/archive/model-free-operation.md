@@ -80,7 +80,7 @@ The [semantic-disable patch](https://github.com/simonsilie/harness-independent-s
 `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED` environment setting. Setting it to `false`
 skips provider construction, vector setup, reranking and background vector sync;
 default retrieval becomes text even when the configured default is hybrid.
-Explicit semantic/hybrid searches are refused. The [patch notes](../../patches/README.md)
+Explicit semantic/hybrid searches are refused. The [patch notes](https://github.com/simonsilie/harness-independent-shared-memory/blob/7eae67dfd94dac91496513da5e7f87cf1ba255e5/patches/README.md)
 describe its scope and reproduction commands.
 
 The isolated patched-package run
@@ -138,7 +138,7 @@ changed; productive activation and verification remain separate roadmap tasks.
 ## Reproducible build verification
 
 A manual patch after every environment rebuild is no longer the only way to get
-that runtime. The [versioned build step](../../patches/README.md#reproducible-runtime-build)
+that runtime. The [versioned build step](https://github.com/simonsilie/harness-independent-shared-memory/blob/7eae67dfd94dac91496513da5e7f87cf1ba255e5/patches/README.md#reproducible-runtime-build)
 produces `basic_memory-1.0.0+semantic.1-py3-none-any.whl` from the wheel pinned in
 `uv.lock` and the same seven-file patch; two builds produced the identical SHA-256
 `c9e847b2306ab4e0484d38e8e96e72c6b8d144760ff176ceec3c705b542efc82`.

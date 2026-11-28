@@ -92,7 +92,8 @@ uv run --locked pytest -m integration
 
 Environment creation installs the locked dependencies; the commands are
 instructions, not an installation performed by retirement. The archived
-`patches/README.md` records optional model-free patch/build setup. Historical
+[patch notes](https://github.com/simonsilie/harness-independent-shared-memory/blob/4fae58dfca94af60a602c7a69b24a7590d5b7d4c/patches/README.md)
+record optional model-free patch/build setup. Historical
 actual-client and protected-identity probes additionally need their documented
 client credentials and owner-provisioned fixtures; the commit contains their source
 and tests, not ignored raw artifacts or a provisioned OS identity.
